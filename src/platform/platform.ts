@@ -60,7 +60,7 @@ import { GroupIdentityProcessor, stripGroupIdentityTag } from "../agent/processo
 import { ImageStripperProcessor } from "../agent/processors/image-stripper-processor.js";
 import { ReasoningStripperProcessor } from "../agent/processors/reasoning-stripper-processor.js";
 import { ToolErrorGate } from "../agent/processors/tool-error-gate.js";
-import { setAllowedBinaries, getAllowedBinariesList } from "../agent/tools/run-command-tool.js";
+import { setAllowedBinaries } from "../agent/tools/run-command-tool.js";
 import fs from "node:fs";
 import path from "node:path";
 import { logger } from "../utils/external-logger.js";
@@ -404,12 +404,6 @@ For single sub-agent tasks, skip the handoff file.`;
         }
       }
 
-      // Append allowed binaries list so the agent knows what run_command can execute
-      const allowedBins = getAllowedBinariesList();
-      if (allowedBins.length > 0) {
-        lines.push("", `## Allowed CLI Binaries\n\nThe run_command tool can execute: ${allowedBins.join(", ")}. Read-only tools (grep, find, cat, ls, sort, head, tail) are always available.`);
-      }
-
       return lines.join("\n");
     },
     model: ({ requestContext }: { requestContext?: { get: (key: string) => unknown } }) => {
@@ -427,6 +421,7 @@ For single sub-agent tasks, skip the handoff file.`;
     memory,
     tools: agentTools,
     inputProcessors: [
+      new ImageStripperProcessor(),       // Strip base64 images from recalled history
       new ToolCallFilter(),             // Strip tool calls/results from recalled history (saves tokens)
       new TokenLimiterProcessor(170_000), // Prevent context overflow
       new ToolErrorGate(),              // Strip tools after repeated errors to force synthesis

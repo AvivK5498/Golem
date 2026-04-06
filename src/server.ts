@@ -192,7 +192,7 @@ export function startServer(deps: ServerDeps) {
 
           // Replace or append OPENROUTER_API_KEY
           if (envContent.includes("OPENROUTER_API_KEY=")) {
-            envContent = envContent.replace(/OPENROUTER_API_KEY=.*/g, `OPENROUTER_API_KEY=${body.openrouterApiKey}`);
+            envContent = envContent.replace(/^[#\s]*OPENROUTER_API_KEY=.*/gm, `OPENROUTER_API_KEY=${body.openrouterApiKey}`);
           } else {
             envContent += `${envContent && !envContent.endsWith("\n") ? "\n" : ""}OPENROUTER_API_KEY=${body.openrouterApiKey}\n`;
           }
@@ -200,7 +200,7 @@ export function startServer(deps: ServerDeps) {
           // Write Groq API key if provided
           if (body.groqApiKey) {
             if (envContent.includes("GROQ_API_KEY=")) {
-              envContent = envContent.replace(/GROQ_API_KEY=.*/g, `GROQ_API_KEY=${body.groqApiKey}`);
+              envContent = envContent.replace(/^[#\s]*GROQ_API_KEY=.*/gm, `GROQ_API_KEY=${body.groqApiKey}`);
             } else {
               envContent += `GROQ_API_KEY=${body.groqApiKey}\n`;
             }
@@ -210,7 +210,7 @@ export function startServer(deps: ServerDeps) {
           if (body.telegram?.botToken) {
             const tokenVar = body.telegram.botTokenVar || "TELEGRAM_BOT_TOKEN";
             if (envContent.includes(`${tokenVar}=`)) {
-              envContent = envContent.replace(new RegExp(`${tokenVar}=.*`, "g"), `${tokenVar}=${body.telegram.botToken}`);
+              envContent = envContent.replace(new RegExp(`^[#\\s]*${tokenVar}=.*`, "gm"), `${tokenVar}=${body.telegram.botToken}`);
             } else {
               envContent += `${tokenVar}=${body.telegram.botToken}\n`;
             }
@@ -295,7 +295,13 @@ export function startServer(deps: ServerDeps) {
               const personaRes = await fetch(`http://localhost:${config.serverPort}/api/platform/agents/generate-persona`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ name: body.agent.name, description: body.agent.description, role: "personal assistant" }),
+                body: JSON.stringify({
+                  name: body.agent.name,
+                  description: body.agent.description,
+                  role: "personal assistant",
+                  ownerName: body.ownerName,
+                  ownerRole: body.ownerRole,
+                }),
               });
               if (personaRes.ok) {
                 const result = await personaRes.json() as { persona?: string; memoryTemplate?: string };
@@ -782,7 +788,7 @@ export function startServer(deps: ServerDeps) {
             let envContent = "";
             try { envContent = fs.readFileSync(envPath, "utf-8"); } catch { /* file doesn't exist */ }
             if (envContent.includes(`${tokenVar}=`)) {
-              envContent = envContent.replace(new RegExp(`${tokenVar}=.*`, "g"), `${tokenVar}=${input.botToken}`);
+              envContent = envContent.replace(new RegExp(`^[#\\s]*${tokenVar}=.*`, "gm"), `${tokenVar}=${input.botToken}`);
             } else {
               envContent += `${envContent && !envContent.endsWith("\n") ? "\n" : ""}${tokenVar}=${input.botToken}\n`;
             }
@@ -845,21 +851,22 @@ export function startServer(deps: ServerDeps) {
     if (req.method === "POST" && pathname === "/api/platform/agents/generate-persona") {
       const body = await readBody(req);
       try {
-        const { name, description, role, behavior } = JSON.parse(body);
+        const { name, description, role, behavior, ownerName, ownerRole } = JSON.parse(body);
         if (!name || !description) {
           return json(res, { error: "name and description are required" }, 400);
         }
 
         const { generateText } = await import("ai");
         const { getModelForId } = await import("./agent/model.js");
-        const onboardingModel = deps.agentSettings?.getGlobalTiers()?.low || "google/gemini-2.5-flash-preview";
+        const onboardingModel = deps.agentSettings?.getGlobalTiers()?.high || "anthropic/claude-sonnet-4-6";
         let agentContext = `Agent name: "${name}"\nAgent ID: "${name.toLowerCase().replace(/[^a-z0-9-]/g, "-")}"\nDescription: "${description}"${role ? `\nRole: "${role}"` : ""}`;
+        if (ownerName) agentContext += `\nOwner name: "${ownerName}"`;
+        if (ownerRole) agentContext += `\nOwner role: "${ownerRole}"`;
         if (behavior) {
           const styleParts: string[] = [];
           if (behavior.responseLength && behavior.responseLength !== "balanced") styleParts.push(`response length: ${behavior.responseLength}`);
           if (behavior.tone && behavior.tone !== "balanced") styleParts.push(`tone: ${behavior.tone}`);
           if (behavior.format && behavior.format !== "conversational") styleParts.push(`format: ${behavior.format}`);
-          if (behavior.language && behavior.language !== "auto_detect") styleParts.push(`language: ${behavior.language}`);
           if (styleParts.length > 0) agentContext += `\nConfigured style: ${styleParts.join(", ")}`;
         }
 
@@ -878,16 +885,89 @@ Be specific and tailored — avoid generic platitudes. Output ONLY the markdown 
             model: getModelForId(onboardingModel),
             temperature: 0.7,
             maxOutputTokens: 1000,
-            system: `You are an AI agent designer. Generate a working memory template in markdown for a new AI assistant.
-The template defines what persistent facts the agent should track about users. Use labeled fields with placeholder values.
+            system: `You are an AI agent designer. Generate a working memory template in markdown for a Mastra AI agent.
 
-The template MUST include these sections (with domain-specific fields within each):
-1. A section for user preferences (communication style, frequency, format preferences)
-2. A section for domain-specific facts (tailored to the agent's purpose, 3-6 fields)
-3. A "Reflection" section where the agent records lessons learned, patterns noticed, and things to improve
+Working memory is the agent's persistent scratchpad — key facts it keeps available about the user across conversations. The agent updates this via the updateWorkingMemory tool. Use labeled fields with empty placeholder hints in brackets.
 
-Include 8-12 fields total. Not generic — tailored to the agent's domain.
-Output ONLY the markdown content, no code fences.`,
+Structure the template as a flat markdown document with these sections:
+1. "User Profile" — name, role/occupation, and 2-3 domain-relevant personal facts
+2. "Preferences" — communication style, preferred format, frequency, and domain-specific preferences (3-5 fields)
+3. "Active Context" — current goals, ongoing projects, recent decisions (3-4 fields)
+4. "Reflection" — patterns noticed, lessons learned, things to improve (2-3 fields)
+
+Keep it concise: 10-15 fields total, each as a single "- **Label**: [hint]" line. Tailor fields to the agent's specific domain — avoid generic filler.
+Output ONLY the markdown, no code fences.
+
+<examples>
+Example 1 — Fitness Coach:
+# Working Memory
+
+## User Profile
+- **Name**: [first name]
+- **Age/Height/Weight**: [if shared]
+- **Activity Level**: [sedentary/moderate/active]
+- **Injuries or Limitations**: [any physical constraints]
+
+## Preferences
+- **Communication Style**: [direct/encouraging/tough love]
+- **Check-in Cadence**: [daily/weekly]
+- **Preferred Workout Type**: [strength/cardio/mixed]
+- **Dietary Approach**: [e.g., high protein, calorie counting]
+
+## Active Context
+- **Current Goal**: [e.g., lose 5kg, run a 5K]
+- **Current Program**: [e.g., PPL 4x/week]
+- **Recent Milestone**: [last achievement]
+
+## Reflection
+- **What's Working**: [effective strategies observed]
+- **What Needs Adjustment**: [areas to improve]
+
+Example 2 — Personal Assistant:
+# Working Memory
+
+## User Profile
+- **Name**: [first name]
+- **Role**: [job title / occupation]
+- **Location/Timezone**: [city, TZ]
+
+## Preferences
+- **Communication Style**: [brief/detailed]
+- **Preferred Language**: [en/he/auto]
+- **Task Handling**: [execute immediately / ask first]
+
+## Active Context
+- **Current Projects**: [list of ongoing work]
+- **Key Deadlines**: [upcoming dates]
+- **Recent Decisions**: [choices made recently]
+
+## Reflection
+- **Patterns Noticed**: [recurring themes]
+- **Lessons Learned**: [things to remember]
+- **Improvement Areas**: [what to do better]
+
+Example 3 — Study Tutor:
+# Working Memory
+
+## User Profile
+- **Name**: [first name]
+- **Level**: [high school/undergrad/grad]
+- **Subject Focus**: [e.g., mathematics, history]
+
+## Preferences
+- **Explanation Style**: [step-by-step / high-level overview]
+- **Practice Format**: [quizzes/worked examples/flashcards]
+- **Session Length**: [short 15min / deep 45min]
+
+## Active Context
+- **Current Topic**: [what we're studying now]
+- **Upcoming Exam**: [date and subject]
+- **Weak Areas**: [concepts that need reinforcement]
+
+## Reflection
+- **Progress Observations**: [what's improving]
+- **Recurring Mistakes**: [patterns in errors]
+</examples>`,
             prompt: agentContext,
           }).catch(() => ({ text: "" })),
         ]);
@@ -913,7 +993,7 @@ Output ONLY the markdown content, no code fences.`,
         let envContent = "";
         try { envContent = fs.readFileSync(envPath, "utf-8"); } catch { /* file doesn't exist */ }
         if (envContent.includes(`${envVar}=`)) {
-          envContent = envContent.replace(new RegExp(`${envVar}=.*`, "g"), `${envVar}=${token}`);
+          envContent = envContent.replace(new RegExp(`^[#\\s]*${envVar}=.*`, "gm"), `${envVar}=${token}`);
         } else {
           envContent += `${envContent && !envContent.endsWith("\n") ? "\n" : ""}${envVar}=${token}\n`;
         }

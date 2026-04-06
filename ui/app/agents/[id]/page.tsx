@@ -27,7 +27,6 @@ interface AgentDetail {
     llm: { provider: string; model: string; temperature: number; maxSteps: number; vision?: { model: string } };
     memory: {
       lastMessages: number;
-      semanticRecall: boolean;
       workingMemory?: { enabled: boolean; scope: string };
     };
     tools: string[];
@@ -1164,7 +1163,6 @@ export default function AgentEditPage({ params }: { params: Promise<{ id: string
 
   // -- Memory state --
   const [lastMessages, setLastMessages] = useState(12);
-  const [semanticRecall, setSemanticRecall] = useState(false);
   const [wmEnabled, setWmEnabled] = useState(true);
   const [wmScope, setWmScope] = useState("resource");
   const [memoryTemplate, setMemoryTemplate] = useState("");
@@ -1220,7 +1218,6 @@ export default function AgentEditPage({ params }: { params: Promise<{ id: string
     setSelectedSkills(c.skills || []);
     setSelectedMcp(c.mcpServers);
     setLastMessages(c.memory.lastMessages);
-    setSemanticRecall(c.memory.semanticRecall);
     setWmEnabled(c.memory.workingMemory?.enabled ?? true);
     setWmScope(c.memory.workingMemory?.scope || "resource");
     setMemoryTemplate(data.memoryTemplate);
@@ -1253,7 +1250,6 @@ export default function AgentEditPage({ params }: { params: Promise<{ id: string
         mcpServers: selectedMcp,
         memory: {
           lastMessages,
-          semanticRecall,
           workingMemory: { enabled: wmEnabled, scope: wmScope },
         },
         transport: {
@@ -1968,94 +1964,6 @@ export default function AgentEditPage({ params }: { params: Promise<{ id: string
                 {!settingsData && <p className="text-[10px] text-muted-foreground">Loading settings...</p>}
                 {settingsData && (
                   <>
-                    {/* Model Settings */}
-                    <Card size="sm">
-                      <CardHeader className="border-b">
-                        <div className="flex items-center gap-2">
-                          <CardTitle className="text-xs">Model Settings</CardTitle>
-                          <Badge variant="outline" className="text-[9px] border-border">live</Badge>
-                        </div>
-                      </CardHeader>
-                      <CardContent className="space-y-4">
-                        <div className="space-y-1.5">
-                          <label className={labelClass}>Current Model</label>
-                          <input
-                            value={settingsData["_resolvedModel"] || settingsData["llm.model"] || ""}
-                            className={`${inputClass} text-muted-foreground font-mono`}
-                            readOnly
-                          />
-                        </div>
-                        <div className="space-y-1.5">
-                          <label className={labelClass}>Active Tier</label>
-                          <select
-                            value={settingsData["model_tier"] || "default"}
-                            onChange={e => saveSetting("model_tier", e.target.value)}
-                            className={inputClass}
-                          >
-                            <option value="default">default ({settingsData["llm.model"] || "base model"})</option>
-                            {(() => {
-                              try {
-                                const tiers: Record<string, string> = JSON.parse(settingsData["llm.tiers"] || "{}");
-                                return Object.entries(tiers).map(([k, v]) => (
-                                  <option key={k} value={k}>{k} ({v})</option>
-                                ));
-                              } catch { return null; }
-                            })()}
-                          </select>
-                        </div>
-                        {settingsData["llm.tiers"] && (
-                          <div className="space-y-1.5">
-                            <label className={labelClass}>Model Tiers</label>
-                            <pre className="text-[11px] text-muted-foreground bg-card/60 border border-border rounded-md px-3 py-2 whitespace-pre-wrap font-mono">
-                              {(() => {
-                                try { return JSON.stringify(JSON.parse(settingsData["llm.tiers"]), null, 2); }
-                                catch { return settingsData["llm.tiers"]; }
-                              })()}
-                            </pre>
-                          </div>
-                        )}
-                        <div className="space-y-1.5">
-                          <label className={labelClass}>Reasoning Effort</label>
-                          <select
-                            value={settingsData["llm.reasoningEffort"] || "medium"}
-                            onChange={e => saveSetting("llm.reasoningEffort", e.target.value)}
-                            className={inputClass}
-                          >
-                            <option value="xhigh">xhigh</option>
-                            <option value="high">high</option>
-                            <option value="medium">medium</option>
-                            <option value="low">low</option>
-                            <option value="minimal">minimal</option>
-                            <option value="none">none</option>
-                          </select>
-                        </div>
-                        <div className="grid grid-cols-2 gap-4">
-                          <div className="flex flex-col gap-1.5">
-                            <label className={labelClass}>Temperature</label>
-                            <input
-                              type="number"
-                              defaultValue={settingsData["llm.temperature"] ?? ""}
-                              onBlur={e => saveSetting("llm.temperature", Number(e.target.value))}
-                              min={0} max={2} step={0.1}
-                              className={numberInputClass}
-                            />
-                          </div>
-                          <div className="flex flex-col gap-1.5">
-                            <label className={labelClass}>Max Steps</label>
-                            <input
-                              type="number"
-                              defaultValue={settingsData["llm.maxSteps"] ?? ""}
-                              onBlur={e => saveSetting("llm.maxSteps", Number(e.target.value))}
-                              min={1} max={100}
-                              className={numberInputClass}
-                            />
-                          </div>
-                        </div>
-                      </CardContent>
-                    </Card>
-
-                    <Separator />
-
                     {/* Memory Settings */}
                     <Card size="sm">
                       <CardHeader className="border-b">
@@ -2075,15 +1983,6 @@ export default function AgentEditPage({ params }: { params: Promise<{ id: string
                             className={numberInputClass}
                           />
                         </div>
-                        <label className="flex items-center gap-2 cursor-pointer">
-                          <input
-                            type="checkbox"
-                            checked={settingsData["memory.semanticRecall"] === "true"}
-                            onChange={e => saveSetting("memory.semanticRecall", e.target.checked)}
-                            className="rounded border-border bg-accent accent-teal-500"
-                          />
-                          <span className="text-[10px] text-muted-foreground">Semantic Recall</span>
-                        </label>
                         <label className="flex items-center gap-2 cursor-pointer">
                           <input
                             type="checkbox"

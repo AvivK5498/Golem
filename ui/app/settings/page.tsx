@@ -33,7 +33,6 @@ export default function SettingsPage() {
 
   // Local state for batch saves
   const [defaultAgent, setDefaultAgent] = useState("");
-  const [serverPort, setServerPort] = useState("");
 
   // Tiers
   const [tierLow, setTierLow] = useState("");
@@ -71,7 +70,6 @@ export default function SettingsPage() {
   useEffect(() => {
     if (!settings) return;
     setDefaultAgent(settings["global.defaultAgent"] ?? "");
-    setServerPort(settings["global.server.port"] ?? "3847");
 
     try {
       const tiers = JSON.parse(settings["global.llm.tiers"] || "{}");
@@ -79,7 +77,7 @@ export default function SettingsPage() {
       setTierMed(tiers.med ?? "");
       setTierHigh(tiers.high ?? "");
     } catch { /* ignore */ }
-    setNanoModel(settings["global.llm.nanoModel"] ?? "");
+    setNanoModel(settings["global.llm.nanoModel"] ?? "google/gemini-3.1-flash-lite-preview");
 
     setObsEnabled(settings["global.observability.enabled"] === "true");
     setObsEndpoint(settings["global.observability.endpoint"] ?? "");
@@ -189,17 +187,9 @@ export default function SettingsPage() {
                 ))}
               </select>
             </div>
-            <div className="space-y-1.5">
-              <label className={labelClass}>Server Port</label>
-              <div className="flex items-center gap-2">
-                <input value={serverPort} onChange={e => setServerPort(e.target.value)} className={numberInputClass} />
-                <Badge variant="outline" className="text-[9px] border-border shrink-0">restart required</Badge>
-              </div>
-            </div>
             <div className="flex justify-end">
               <Button size="sm" onClick={() => saveSection("Platform", {
                 "global.defaultAgent": defaultAgent,
-                "global.server.port": serverPort,
               })} disabled={saving === "Platform"}>
                 {saving === "Platform" ? "Saving..." : "Save"}
               </Button>

@@ -30,9 +30,9 @@ import type { OpenRouterModel } from "@/lib/types";
 const TOTAL_STEPS = 6;
 
 const DEFAULT_TIERS = {
-  low: "google/gemini-2.5-flash-preview",
-  med: "anthropic/claude-haiku-4-5",
-  high: "anthropic/claude-sonnet-4-6",
+  low: "google/gemini-3-flash-preview",
+  med: "openai/gpt-5.4",
+  high: "anthropic/claude-opus-4-6",
 };
 
 const TIER_DESCRIPTIONS = {
@@ -169,26 +169,12 @@ function StepTiers({
                     </span>
                   </div>
                   <div className="mt-2">
-                    {models.length > 0 ? (
-                      <select
-                        value={tiers[tier]}
-                        onChange={(e) => setTiers({ ...tiers, [tier]: e.target.value })}
-                        className="w-full bg-muted border border-border rounded-md px-3 py-2 text-sm font-mono text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-                      >
-                        {models.map((m) => (
-                          <option key={m.id} value={m.id}>
-                            {m.id}
-                          </option>
-                        ))}
-                      </select>
-                    ) : (
-                      <Input
-                        value={tiers[tier]}
-                        onChange={(e) => setTiers({ ...tiers, [tier]: e.target.value })}
-                        className="font-mono"
-                        placeholder="model-provider/model-name"
-                      />
-                    )}
+                    <Input
+                      value={tiers[tier]}
+                      onChange={(e) => setTiers({ ...tiers, [tier]: e.target.value })}
+                      className="font-mono"
+                      placeholder="model-provider/model-name"
+                    />
                   </div>
                 </div>
               </div>
@@ -416,6 +402,10 @@ function StepAgent({
   setAgentDescription,
   agentTier,
   setAgentTier,
+  ownerName,
+  setOwnerName,
+  ownerRole,
+  setOwnerRole,
   selectedTools,
   setSelectedTools,
   selectedSkills,
@@ -432,6 +422,10 @@ function StepAgent({
   setAgentDescription: (v: string) => void;
   agentTier: string;
   setAgentTier: (v: string) => void;
+  ownerName: string;
+  setOwnerName: (v: string) => void;
+  ownerRole: string;
+  setOwnerRole: (v: string) => void;
   selectedTools: string[];
   setSelectedTools: (v: string[]) => void;
   selectedSkills: string[];
@@ -495,6 +489,27 @@ function StepAgent({
               rows={3}
               className="w-full bg-muted border border-border rounded-md px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring resize-y"
             />
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="owner-name">Your name</Label>
+              <Input
+                id="owner-name"
+                value={ownerName}
+                onChange={(e) => setOwnerName(e.target.value)}
+                placeholder="e.g., Alex"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="owner-role">Your role <span className="text-muted-foreground font-normal">(optional)</span></Label>
+              <Input
+                id="owner-role"
+                value={ownerRole}
+                onChange={(e) => setOwnerRole(e.target.value)}
+                placeholder="e.g., Software Engineer, Founder"
+              />
+            </div>
           </div>
 
           <div className="space-y-2">
@@ -739,6 +754,8 @@ export default function OnboardingPage() {
   const [agentName, setAgentName] = useState("");
   const [agentDescription, setAgentDescription] = useState("");
   const [agentTier, setAgentTier] = useState("low");
+  const [ownerName, setOwnerName] = useState("");
+  const [ownerRole, setOwnerRole] = useState("");
   const [selectedTools, setSelectedTools] = useState<string[]>(
     BUILTIN_TOOLS.filter((t) => t.default).map((t) => t.id)
   );
@@ -763,6 +780,8 @@ export default function OnboardingPage() {
             ownerId: ownerId ? parseInt(ownerId, 10) : 0,
           },
           groqApiKey: groqApiKey || undefined,
+          ownerName: ownerName || undefined,
+          ownerRole: ownerRole || undefined,
           agent: {
             name: agentName,
             description: agentDescription,
@@ -799,7 +818,7 @@ export default function OnboardingPage() {
         {step === 2 && <StepTiers tiers={tiers} setTiers={setTiers} onNext={() => setStep(3)} onBack={() => setStep(1)} />}
         {step === 3 && <StepTelegram botToken={botToken} setBotToken={setBotToken} ownerId={ownerId} setOwnerId={setOwnerId} onNext={() => setStep(4)} onBack={() => setStep(2)} />}
         {step === 4 && <StepVoice groqApiKey={groqApiKey} setGroqApiKey={setGroqApiKey} onNext={() => setStep(5)} onBack={() => setStep(3)} />}
-        {step === 5 && <StepAgent agentName={agentName} setAgentName={setAgentName} agentDescription={agentDescription} setAgentDescription={setAgentDescription} agentTier={agentTier} setAgentTier={setAgentTier} selectedTools={selectedTools} setSelectedTools={setSelectedTools} selectedSkills={selectedSkills} setSelectedSkills={setSelectedSkills} selectedMcp={selectedMcp} setSelectedMcp={setSelectedMcp} onSubmit={handleCreateAgent} onBack={() => setStep(4)} submitting={submitting} />}
+        {step === 5 && <StepAgent agentName={agentName} setAgentName={setAgentName} agentDescription={agentDescription} setAgentDescription={setAgentDescription} agentTier={agentTier} setAgentTier={setAgentTier} ownerName={ownerName} setOwnerName={setOwnerName} ownerRole={ownerRole} setOwnerRole={setOwnerRole} selectedTools={selectedTools} setSelectedTools={setSelectedTools} selectedSkills={selectedSkills} setSelectedSkills={setSelectedSkills} selectedMcp={selectedMcp} setSelectedMcp={setSelectedMcp} onSubmit={handleCreateAgent} onBack={() => setStep(4)} submitting={submitting} />}
         {step === 6 && <StepDone agentName={agentName} />}
       </div>
     </div>

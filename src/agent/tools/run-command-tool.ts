@@ -18,9 +18,12 @@ const ALWAYS_ALLOWED = new Set([
 /** User-configured allowed binaries — loaded from SQLite at startup */
 let userAllowedBinaries: Set<string> = new Set();
 
-/** Update the allowed binaries list (called from platform.ts at startup and when settings change) */
+/** Update the allowed binaries list and refresh tool description (called from platform.ts at startup and when settings change) */
 export function setAllowedBinaries(binaries: string[]): void {
   userAllowedBinaries = new Set(binaries);
+  // Update the tool description with current binaries list
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  (runCommandTool as any).description = getRunCommandDescription();
 }
 
 /** Get the current allowed binaries list (for tool description) */
@@ -102,7 +105,7 @@ export function getRunCommandDescription(): string {
 
 export const runCommandTool = createTool({
   id: "run_command",
-  description: "Run a CLI binary on the host machine. Only explicitly allowed binaries can execute. Read-only tools (grep, find, cat, ls, sort, head, tail) are always available.",
+  description: "Run a CLI binary on the host machine. Read-only tools (grep, find, cat, ls, wc, sort, head, tail) are always available.",
   inputSchema: z.object({
     command: z.string().describe("The shell command to execute."),
     timeout: z.number().optional().default(30000),

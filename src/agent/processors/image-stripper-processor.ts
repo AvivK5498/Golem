@@ -12,11 +12,7 @@ import type { MastraDBMessage } from "@mastra/core/memory";
 export class ImageStripperProcessor implements Processor {
   id = "image-stripper";
 
-  async processOutputResult({ messages }: {
-    messages: MastraDBMessage[];
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    [key: string]: any;
-  }): Promise<MastraDBMessage[]> {
+  private stripImages(messages: MastraDBMessage[]): MastraDBMessage[] {
     return messages.map(msg => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const content = msg.content as any;
@@ -58,5 +54,21 @@ export class ImageStripperProcessor implements Processor {
 
       return msg;
     });
+  }
+
+  async processOutputResult({ messages }: {
+    messages: MastraDBMessage[];
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    [key: string]: any;
+  }): Promise<MastraDBMessage[]> {
+    return this.stripImages(messages);
+  }
+
+  async processInputStep({ messages }: {
+    messages: MastraDBMessage[];
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    [key: string]: any;
+  }): Promise<MastraDBMessage[]> {
+    return this.stripImages(messages);
   }
 }
