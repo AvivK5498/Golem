@@ -51,7 +51,7 @@ export const codeAgentTool = createTool({
   ],
   execute: async (input, context) => {
     if (!sessionManager) {
-      return "Coding agent system is not enabled. Add a `coding` section to config.yaml with `enabled: true`.";
+      return "Coding agent system is not available. Ensure Claude Code is installed (`npm install -g @anthropic-ai/claude-code`).";
     }
 
     // Auto-resolve cwd: repo path from integration takes priority (agent can't escape the repo).

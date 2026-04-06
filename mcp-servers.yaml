@@ -1,8 +1,12 @@
-servers:
-  brave-search:
-    command: npx
-    args:
-      - -y
-      - "@brave/brave-search-mcp-server"
-    env:
-      BRAVE_API_KEY: ${BRAVE_API_KEY}
+# MCP server definitions.
+# Add servers here to make their tools available to all agents.
+#
+# Example:
+#   servers:
+#     brave-search:
+#       command: npx
+#       args: ["-y", "@brave/brave-search-mcp-server"]
+#       env:
+#         BRAVE_API_KEY: ${BRAVE_API_KEY}
+
+servers: {}

@@ -37,7 +37,6 @@ export class JobExecutor {
   /** Register a handler for a job type. */
   registerHandler(handler: JobHandler): void {
     this.handlers.set(handler.type, handler);
-    console.log(`[job-executor] registered handler: ${handler.type}`);
     logger.info(`handler registered: ${handler.type}`, { jobType: handler.type });
   }
 
@@ -62,7 +61,7 @@ export class JobExecutor {
         logger.error(`handler load failed: ${file} — ${err instanceof Error ? err.message : String(err)}`, { jobType: file });
       }
     }
-    console.log(`[job-executor] loaded ${this.handlers.size} handler(s) from ${dir}`);
+    logger.info(`loaded ${this.handlers.size} handler(s)`, { dir });
   }
 
   private isJobHandler(obj: unknown): obj is JobHandler {

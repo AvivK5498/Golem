@@ -11,16 +11,52 @@ Built on [Mastra](https://mastra.ai) + [Vercel AI SDK](https://ai-sdk.dev). Uses
 - **Multi-agent platform** — Run multiple agents, each with their own Telegram bot, persona, and toolset
 - **Guided onboarding** — 6-step wizard walks you through API keys, model tiers, Telegram setup, voice transcription, and your first agent
 - **AI-generated personas** — Describe what your agent should do; the system generates a persona with identity, boundaries, and domain expertise
-- **Configurable behavior** — 5 dropdowns control response style: length, agency, tone, format, and language
-- **Voice transcription** — Agents transcribe voice notes via Groq's Whisper API (free tier)
-- **Working memory** — Persistent scratchpad per agent that remembers preferences, facts, and context across conversations
-- **Webhook system** — Receive webhooks from external services (GitHub, Strava, CI/CD) with LLM-based scenario classification
-- **Scheduled tasks** — Cron-based scheduling for recurring agent actions
-- **Skills** — Markdown-based capability modules that teach agents how to use tools for specific tasks
-- **MCP integrations** — Connect external APIs via Model Context Protocol servers
-- **Command security** — Allowlist-based binary execution control, configurable via the UI
 - **Web UI** — Next.js control plane for managing agents, settings, crons, and activity feeds
+- **Working memory** — Persistent scratchpad per agent that remembers preferences, facts, and context across conversations
+- **Skills & MCP** — Extend agents with markdown skill modules or Model Context Protocol servers
 - **Phoenix observability** — OpenTelemetry tracing for debugging agent behavior
+
+<details>
+<summary><strong>Agent Behavior</strong></summary>
+
+- **Configurable behavior** — 5 dropdowns control response style: length, agency, tone, format, and language
+- **Proactive check-ins** — Agents initiate unprompted messages on a configurable schedule with probability gates and active-hours windows
+- **Group chat support** — LLM-based classification decides when to participate in group conversations (5s timeout fallback)
+- **Voice transcription** — Agents transcribe voice notes via Groq's Whisper API (free tier)
+- **Sub-agent delegation** — Parent agents delegate specialized tasks to child agents with automatic result compaction
+
+</details>
+
+<details>
+<summary><strong>Automation & Integration</strong></summary>
+
+- **Webhook system** — Receive webhooks from external services (GitHub, Strava, CI/CD) with LLM-based scenario classification and field template interpolation
+- **Scheduled tasks** — Cron-based scheduling for recurring agent actions
+- **Job queue** — Async background tasks for coding, HTTP polling, and custom workflows with retry logic
+- **Code agent** — Delegate coding tasks to Claude Code with live progress updates and effort-based model selection
+
+</details>
+
+<details>
+<summary><strong>Safety & Reliability</strong></summary>
+
+- **Tool approval workflow** — Destructive operations require owner approval via Telegram buttons with 15-minute expiry
+- **Command security** — Allowlist-based binary execution control, configurable via the UI
+- **Tool rate limiting** — Max 5 tool calls per step, 15 per turn to prevent runaway loops
+- **Stale response detection** — Detects repeated responses and retries with a fallback model
+- **Message deduplication** — Per-agent dedup with 5-message sliding window
+
+</details>
+
+<details>
+<summary><strong>Context Management</strong></summary>
+
+- **Task tracking** — Per-thread task state (pending/in-progress/completed) injected into agent context with auto-eviction
+- **Prompt tracing** — Full prompt/response traces viewable in the UI for debugging
+- **Token limiter** — Prevents context overflow by enforcing a 170K token budget per turn
+- **Tool error gate** — Automatically disables tools after consecutive failures
+
+</details>
 
 ![Agent Creation](screenshots/new-agent.png)
 

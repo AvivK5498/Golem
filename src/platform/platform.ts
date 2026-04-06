@@ -848,10 +848,7 @@ export async function startPlatform(): Promise<PlatformContext> {
     agentSettings.seedFromConfig(config);
   }
   if (agentConfigs.length === 0) {
-    console.warn(
-      "[platform] no agents found in agents/. Create agent directories with config.yaml to get started.",
-    );
-    logger.warn("no agents found in agents/ directory");
+    console.log("[platform] no agents configured yet — create one via the web UI at http://localhost:3015");
   }
 
   // 6. Create TransportManager
@@ -1014,7 +1011,9 @@ export async function startPlatform(): Promise<PlatformContext> {
   const defaultAgentId = configuredDefault && runners.has(configuredDefault)
     ? configuredDefault
     : agentConfigs[0]?.id;
-  console.log(`[platform] default agent for webhooks: "${defaultAgentId}" (config: "${configuredDefault}", runners: [${[...runners.keys()].join(", ")}])`);
+  if (defaultAgentId) {
+    logger.info(`default webhook agent: ${defaultAgentId}`);
+  }
 
   const server = startServer({
     startedAt,

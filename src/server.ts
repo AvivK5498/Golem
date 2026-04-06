@@ -1370,7 +1370,15 @@ Output ONLY the markdown content, no code fences.`,
   const port = deps.port ?? config.serverPort;
   server.listen(port, () => {
     console.log(`[server] listening on http://localhost:${port}`);
+    console.log(`[server] web UI at http://localhost:3015`);
     logger.info(`Server listening on port ${port}`, { port: String(port) });
+
+    // Auto-open the UI in the default browser on first start
+    import("node:child_process").then(({ exec }) => {
+      const url = "http://localhost:3015";
+      const cmd = process.platform === "darwin" ? `open ${url}` : process.platform === "win32" ? `start ${url}` : `xdg-open ${url}`;
+      exec(cmd);
+    });
   });
   return server;
 }
