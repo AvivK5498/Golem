@@ -24,7 +24,7 @@ export function EmptyState({ icon: Icon, title, description, action, children }:
       <p className="text-sm text-muted-foreground mt-1 max-w-sm">{description}</p>
       {action && (
         action.href ? (
-          <Button className="mt-4" render={<a href={action.href} />}>
+          <Button className="mt-4" nativeButton={false} render={<a href={action.href} />}>
             {action.label}
           </Button>
         ) : (
