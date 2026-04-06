@@ -402,6 +402,11 @@ For single sub-agent tasks, skip the handoff file.`;
         if (section.label === "Memory" && delegationBlock) {
           lines.push("", delegationBlock);
         }
+
+        // Insert skills guidance after Memory (only if agent has skills)
+        if (section.label === "Memory" && hasSkills) {
+          lines.push("", `## Skills\n\nYou have ${skillPaths.length} skill(s) assigned. Before fulfilling a user request, check if a matching skill exists using the workspace search tool. If a skill matches, read it and follow its instructions. If no skill matches, proceed as usual.`);
+        }
       }
 
       return lines.join("\n");
