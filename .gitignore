@@ -1,0 +1,85 @@
+node_modules/
+dist/
+*.log
+
+# Environment & secrets
+.env
+
+# Vendored MCP servers
+vendor/
+
+# Database files
+*.db
+*.db-shm
+*.db-wal
+
+# Runtime data
+data/auth_info_baileys/
+data/messages.json
+data/media/
+data/*.json
+data/*
+
+# User-specific config (copy from *.example files)
+/config.yaml
+config/*
+/PERSONA.md
+/HEARTBEAT.md
+/HEARTBEAT_NOTES.md
+/MEMORY.md
+
+# Experimental / dev sandboxes
+.agents/
+sandbox/
+
+# Local scripts
+scripts/*
+
+# Personal content / legacy artifacts
+images_to_post/
+prompts/
+memory.db
+~/
+-v/
+phoenix-trace*.png
+
+# Social media workflows (user-specific)
+workflows/auto-post-from-folder.ts
+workflows/social-media-post.ts
+workflows/social-media-carousel.ts
+workflows/social-media-story.ts
+
+# AI assistant configs
+.claude/
+.gemini/
+CLAUDE.md
+AGENTS.md
+
+# Beads task tracking (ephemeral)
+.beads/
+.mcp.json
+
+# Git worktrees
+.worktrees/
+
+# Media & screenshots
+*.png
+!screenshots/*.png
+*.jpg
+*.jpeg
+*.pdf
+
+# Tests
+**/__tests__/
+src/test-harness.ts
+test_*.py
+
+# Tool artifacts
+.playwright-mcp/
+
+# Generated content
+summary.md
+
+# macOS
+.DS_Store
+**/.DS_Store

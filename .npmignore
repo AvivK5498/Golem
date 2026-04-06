@@ -1,0 +1,25 @@
+# Development
+.husky/
+.eslint*
+tsconfig*.json
+**/__tests__/
+src/test-harness.ts
+
+# Data & config
+data/
+.env*
+!.env.example
+config.yaml
+mcp-servers.yaml
+
+# Documentation (keep README and LICENSE via files field)
+docs/
+skills/
+screenshots/
+CLAUDE.md
+DESIGN.md
+ui/
+
+# OS & editor
+.DS_Store
+*.log

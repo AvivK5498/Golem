@@ -1,0 +1,14 @@
+#!/bin/sh
+
+# Secret detection
+if command -v gitleaks >/dev/null 2>&1; then
+  gitleaks protect --staged --verbose || exit 1
+else
+  echo "WARNING: gitleaks not installed. Run: brew install gitleaks"
+fi
+
+# Type checking
+npx tsc --noEmit -p tsconfig.build.json || exit 1
+
+# Lint staged files
+npx lint-staged || exit 1

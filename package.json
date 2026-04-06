@@ -1,0 +1,82 @@
+{
+  "name": "golem-agent",
+  "version": "0.1.0",
+  "description": "Workflow-first personal AI agent. Multi-platform messaging. Semantic memory. Autonomous operation.",
+  "type": "module",
+  "bin": {
+    "golem": "./bin/golem.js"
+  },
+  "files": [
+    "src/",
+    "!src/__tests__/",
+    "!src/**/__tests__/",
+    "!src/test-harness.ts",
+    "bin/",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "keywords": [
+    "ai",
+    "agent",
+    "chatbot",
+    "telegram",
+    "workflow",
+    "automation"
+  ],
+  "workspaces": [
+    "ui"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/AvivK5498/Golem.git"
+  },
+  "scripts": {
+    "dev": "tsx src/cli.ts",
+    "dev:watch": "tsx watch src/cli.ts",
+    "start": "tsx src/cli.ts",
+    "test:agent": "npx tsx src/test-harness.ts",
+    "test": "bun test",
+    "lint": "eslint src/",
+    "prepare": "husky"
+  },
+  "dependencies": {
+    "@mastra/arize": "^1.0.9",
+    "@mastra/core": "^1.15.0",
+    "@mastra/libsql": "^1.7.2",
+    "@mastra/mcp": "^1.3.1",
+    "@mastra/memory": "^1.9.0",
+    "@mastra/observability": "^1.2.1",
+    "@modelcontextprotocol/sdk": "^1.25.3",
+    "@openrouter/ai-sdk-provider": "^2.2.1",
+    "@types/better-sqlite3": "^7.6.13",
+    "ai": "^6.0.100",
+    "better-sqlite3": "^12.6.2",
+    "cron-parser": "^5.5.0",
+    "dotenv": "^16.4.0",
+    "grammy": "^1.41.1",
+    "tsx": "^4.19.0",
+    "yaml": "^2.8.2",
+    "zod": "^4.3.6"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.2",
+    "@types/bun": "^1.3.11",
+    "@types/node": "^22.10.0",
+    "@typescript-eslint/eslint-plugin": "^8.54.0",
+    "@typescript-eslint/parser": "^8.54.0",
+    "eslint": "^9.39.2",
+    "husky": "^9.1.7",
+    "lint-staged": "^16.2.7",
+    "typescript": "^5.7.3",
+    "typescript-eslint": "^8.54.0"
+  },
+  "lint-staged": {
+    "*.ts": [
+      "eslint --max-warnings 0"
+    ]
+  }
+}
