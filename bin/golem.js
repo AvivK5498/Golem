@@ -1,22 +1,29 @@
-#!/bin/bash
-# Golem — start the platform with auto-restart support
-# Exit code 75 = restart requested (e.g. after onboarding writes config)
-SOURCE="${BASH_SOURCE[0]}"
-while [ -L "$SOURCE" ]; do
-  DIR="$(cd -P "$(dirname "$SOURCE")" && pwd)"
-  SOURCE="$(readlink "$SOURCE")"
-  [[ $SOURCE != /* ]] && SOURCE="$DIR/$SOURCE"
-done
-SCRIPT_DIR="$(cd -P "$(dirname "$SOURCE")/.." && pwd)"
-cd "$SCRIPT_DIR"
+#!/usr/bin/env node
+// Golem — start the platform with auto-restart support
+// Exit code 75 = restart requested (e.g. after onboarding writes config)
+import { spawn } from "node:child_process";
+import { fileURLToPath } from "node:url";
+import { dirname, resolve } from "node:path";
 
-while true; do
-  npx tsx src/cli.ts
-  EXIT_CODE=$?
-  if [ "$EXIT_CODE" -eq 75 ]; then
-    echo "[golem] restarting platform..."
-    sleep 1
-    continue
-  fi
-  exit $EXIT_CODE
-done
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const root = resolve(__dirname, "..");
+process.chdir(root);
+
+function start() {
+  const child = spawn("npx", ["tsx", "src/cli.ts"], {
+    cwd: root,
+    stdio: "inherit",
+    shell: true,
+  });
+
+  child.on("exit", (code) => {
+    if (code === 75) {
+      console.log("[golem] restarting platform...");
+      setTimeout(start, 1000);
+    } else {
+      process.exit(code ?? 1);
+    }
+  });
+}
+
+start();
