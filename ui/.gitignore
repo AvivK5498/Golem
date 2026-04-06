@@ -24,6 +24,10 @@
 .DS_Store
 *.pem
 
+# lockfiles managed at workspace root
+package-lock.json
+bun.lock
+
 # debug
 npm-debug.log*
 yarn-debug.log*

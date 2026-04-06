@@ -3,15 +3,9 @@
  */
 import "dotenv/config";
 
-const required = ["OPENROUTER_API_KEY"] as const;
-const missing = required.filter((k) => !process.env[k]);
-if (missing.length) {
-  console.error(
-    `\n  Missing required environment variables: ${missing.join(", ")}\n\n` +
-      `  Copy the example file and fill in your keys:\n` +
-      `    cp .env.example .env\n`,
-  );
-  process.exit(1);
+if (!process.env.OPENROUTER_API_KEY) {
+  console.log("\n  No OPENROUTER_API_KEY found — starting in onboarding mode.");
+  console.log("  Open http://localhost:3015 to configure your platform.\n");
 }
 
 const { startPlatform } = await import("./platform/platform.js");
