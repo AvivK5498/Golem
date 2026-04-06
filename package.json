@@ -35,9 +35,9 @@
     "url": "https://github.com/AvivK5498/Golem.git"
   },
   "scripts": {
-    "dev": "tsx src/cli.ts",
-    "dev:watch": "tsx watch src/cli.ts",
-    "start": "tsx src/cli.ts",
+    "dev": "concurrently -n platform,ui -c blue,green \"tsx src/cli.ts\" \"npm run dev --workspace=ui\"",
+    "dev:watch": "concurrently -n platform,ui -c blue,green \"tsx watch src/cli.ts\" \"npm run dev --workspace=ui\"",
+    "start": "concurrently -n platform,ui -c blue,green \"tsx src/cli.ts\" \"npm run dev --workspace=ui\"",
     "test:agent": "npx tsx src/test-harness.ts",
     "test": "bun test",
     "lint": "eslint src/",
@@ -55,6 +55,7 @@
     "@types/better-sqlite3": "^7.6.13",
     "ai": "^6.0.100",
     "better-sqlite3": "^12.6.2",
+    "concurrently": "^9.2.1",
     "cron-parser": "^5.5.0",
     "dotenv": "^16.4.0",
     "grammy": "^1.41.1",
