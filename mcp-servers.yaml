@@ -1,13 +1,4 @@
 servers:
-  context7:
-    url: https://mcp.context7.com/mcp
-  weather:
-    command: npx
-    args:
-      - -y
-      - open-meteo-mcp-server
-  flights:
-    url: https://mcp.worldairfares.com
   brave-search:
     command: npx
     args:
