@@ -50,7 +50,10 @@ export const codeAgentTool = createTool({
     { input: { task: "Refactor the scheduler module to support priority queues. Update `src/scheduler/job-queue.ts` and add tests.", effort: "high" } },
   ],
   execute: async (input, context) => {
+    console.log(`[coding] code_agent invoked: effort=${input.effort}, task=${input.task.slice(0, 120)}`);
+
     if (!sessionManager) {
+      console.error("[coding] code_agent failed: sessionManager is null — coding system not initialized");
       return "Coding agent system is not available. Ensure Claude Code is installed (`npm install -g @anthropic-ai/claude-code`).";
     }
 
@@ -59,6 +62,7 @@ export const codeAgentTool = createTool({
     const repoPath = context?.requestContext?.get("repoPath" as never) as unknown as string | undefined;
     const cwd = repoPath || input.cwd || process.cwd();
     const model = input.effort === "high" ? "claude-opus-4-6" : "claude-sonnet-4-6";
+    console.log(`[coding] resolved cwd=${cwd}, model=${model}`);
 
     // Try async dispatch via job queue
     const jobQueue = context?.requestContext?.get("jobQueue" as never) as unknown as JobQueue | undefined;
@@ -92,19 +96,23 @@ export const codeAgentTool = createTool({
         platform,
       );
 
+      console.log(`[coding] job dispatched: id=${jobId}, agent=${agentId}, target=${targetJid}, platform=${platform}`);
       return `Coding task dispatched (job ${jobId}, ${input.effort} effort → ${model}). Progress will appear as a pinned message. Result will be injected into our conversation when done.`;
     }
 
     // Fallback: synchronous execution (no job queue available)
+    console.log("[coding] no job queue available, executing synchronously");
     try {
       const result = await sessionManager.execute(input.task, cwd, "claude", progressSender ?? undefined, model);
       if (progressFlusher) await progressFlusher().catch(() => {});
+      console.log(`[coding] sync execution done: success=${result.success}, duration=${Math.round(result.durationMs / 1000)}s`);
       const truncated = result.output.length > 10_000
         ? result.output.slice(0, 10_000) + "\n...[output truncated at 10KB]"
         : result.output;
       return `[${result.agent}] ${result.success ? "OK" : "FAILED"} (${Math.round(result.durationMs / 1000)}s)\n${truncated}`;
     } catch (err) {
       if (progressFlusher) await progressFlusher().catch(() => {});
+      console.error("[coding] sync execution error:", err instanceof Error ? err.stack || err.message : String(err));
       return `Coding agent error: ${err instanceof Error ? err.message : String(err)}`;
     }
   },

@@ -197,6 +197,7 @@ export class JobExecutor {
 
     try {
       const input = JSON.parse(job.input);
+      console.log(`[job-executor] executing job ${job.id} (${job.type}), attempt ${job.attempt + 1}/${job.max_attempts}, agent=${job.agent_id || "none"}`);
       const result = await handler.execute(input, ctx);
 
       if (result.success) {
@@ -215,7 +216,9 @@ export class JobExecutor {
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      console.error(`[job-executor] job ${job.id} failed (attempt ${job.attempt + 1}/${job.max_attempts}):`, message);
+      const stack = err instanceof Error ? err.stack : undefined;
+      console.error(`[job-executor] job ${job.id} (${job.type}) failed (attempt ${job.attempt + 1}/${job.max_attempts}):`, message);
+      if (stack) console.error(`[job-executor] stack trace:\n${stack}`);
       logger.error(`job failed: ${job.type} job ${job.id} (attempt ${job.attempt + 1}/${job.max_attempts}) — ${message}`, { jobId: String(job.id), jobType: job.type, agent: job.agent_id || "" });
 
       if (job.attempt + 1 < job.max_attempts) {

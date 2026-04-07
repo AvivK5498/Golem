@@ -104,6 +104,7 @@ export class ClaudeBackend implements CodingRuntime {
 
   async execute(task: string, cwd: string, onProgress?: ProgressCallback, model?: string): Promise<CodingResult> {
     const start = Date.now();
+    console.log(`[coding] ClaudeBackend.execute: model=${model || "default"}, cwd=${cwd}, task=${task.slice(0, 100)}`);
     const prompt = `Working directory: ${cwd}\nAll files MUST be created inside this directory. Never write to ~, /tmp, or /root.\n\n${task}`;
     const parser = createStreamParser(onProgress);
     const args = ["-p", prompt, "--dangerously-skip-permissions", "--output-format", "stream-json", "--verbose"];
@@ -123,6 +124,12 @@ export class ClaudeBackend implements CodingRuntime {
     const success = result.reason === "exit" && result.exitCode === 0;
     let output = extractStreamResult(result.output) || "(completed)";
 
+    if (!success) {
+      console.error(`[coding] ClaudeBackend failed: reason=${result.reason}, exitCode=${result.exitCode}, output=${result.output.slice(0, 300)}`);
+    } else {
+      console.log(`[coding] ClaudeBackend success: duration=${Math.round(durationMs / 1000)}s`);
+    }
+
     if (!success && result.reason !== "exit") {
       output = `${failurePrefix(result.reason, DEFAULT_OVERALL_TIMEOUT, DEFAULT_NO_OUTPUT_TIMEOUT)}\n${output}`;
     }
@@ -138,15 +145,18 @@ export class ClaudeBackend implements CodingRuntime {
 
   async isAvailable(): Promise<boolean> {
     try {
-      await execFile("which", ["claude"], { timeout: 5000 });
+      const { stdout } = await execFile("which", ["claude"], { timeout: 5000 });
+      console.log(`[coding] claude binary found: ${stdout.trim()}`);
       return true;
-    } catch {
+    } catch (err) {
+      console.error("[coding] claude binary not found:", err instanceof Error ? err.message : String(err));
       return false;
     }
   }
 }
 
 export function createBackend(name: string): CodingRuntime {
+  console.log(`[coding] createBackend: ${name}`);
   if (name !== "claude") {
     throw new Error(`Unknown coding agent: ${name}. Only "claude" is supported.`);
   }

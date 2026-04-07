@@ -101,12 +101,14 @@ export function spawnWithWatchdog(opts: SpawnWatchdogOptions): Promise<SpawnWatc
 
     // Overall timeout
     const overallTimer = setTimeout(() => {
+      console.error(`[coding] overall timeout reached (${overallTimeoutMs / 1000}s), killing pid=${child.pid}`);
       reason = "overall-timeout";
       killTree();
     }, overallTimeoutMs);
 
     // No-output watchdog
     let watchdogTimer = setTimeout(() => {
+      console.error(`[coding] no-output timeout reached (${noOutputTimeoutMs / 1000}s), killing pid=${child.pid}`);
       reason = "no-output-timeout";
       killTree();
     }, noOutputTimeoutMs);
@@ -114,6 +116,7 @@ export function spawnWithWatchdog(opts: SpawnWatchdogOptions): Promise<SpawnWatc
     function resetWatchdog(): void {
       clearTimeout(watchdogTimer);
       watchdogTimer = setTimeout(() => {
+        console.error(`[coding] no-output timeout reached (${noOutputTimeoutMs / 1000}s), killing pid=${child.pid}`);
         reason = "no-output-timeout";
         killTree();
       }, noOutputTimeoutMs);
@@ -143,7 +146,7 @@ export function spawnWithWatchdog(opts: SpawnWatchdogOptions): Promise<SpawnWatc
     });
 
     child.on("error", (err) => {
-      console.log(`[coding] spawn error: ${err.message}`);
+      console.error(`[coding] spawn error for '${command}': ${err.message}`, (err as NodeJS.ErrnoException).code ? `(code: ${(err as NodeJS.ErrnoException).code})` : "");
       reason = "error";
       appendOutput(Buffer.from(err.message));
       finish(null);

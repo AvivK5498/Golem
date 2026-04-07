@@ -45,6 +45,7 @@ export const codingRunnerHandler: JobHandler = {
     }
 
     const { task, cwd, model } = input as { task: string; cwd: string; model?: string };
+    console.log(`[coding-runner] job ${ctx.jobId} received: model=${model || "default"}, cwd=${cwd}, task=${task.slice(0, 120)}`);
     logger.info(`coding job started: ${task.slice(0, 100)}`, { jobId: ctx.jobId, jobType: "coding" });
     const startTime = Date.now();
     const canEdit = !!ctx.sendMessageReturningId && !!ctx.editMessage;
@@ -90,6 +91,7 @@ export const codingRunnerHandler: JobHandler = {
     };
 
     // Execute the coding task
+    console.log(`[coding-runner] job ${ctx.jobId} executing via claude backend`);
     const result = await mgr.execute(task, cwd, "claude", onProgress, model);
 
     // Build the result FIRST so we can return early if post-processing crashes.
