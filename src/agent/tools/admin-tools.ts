@@ -165,6 +165,10 @@ export const scheduleJobTool = createTool({
         platform
       );
 
+      // Signal AsyncJobGuard to stop the agent loop
+      const rc = context?.requestContext;
+      if (rc) rc.set("_asyncJobDispatched" as never, true as never);
+
       return `Background job "${input.type}" enqueued successfully (ID: ${jobId}). You'll receive updates as it processes.`;
     } catch (err) {
       return `Failed to enqueue job: ${err instanceof Error ? err.message : String(err)}`;

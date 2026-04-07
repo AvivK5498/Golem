@@ -79,11 +79,11 @@ export const codeAgentTool = createTool({
       // Set the flag BEFORE enqueue to block parallel calls in the same step.
       const rc = context?.requestContext;
       if (rc) {
-        const alreadyDispatched = rc.get("_codingJobDispatched" as never) as unknown as boolean | undefined;
+        const alreadyDispatched = rc.get("_asyncJobDispatched" as never) as unknown as boolean | undefined;
         if (alreadyDispatched) {
           return "A coding task was already dispatched this turn. Wait for it to complete before dispatching another.";
         }
-        rc.set("_codingJobDispatched" as never, true as never);
+        rc.set("_asyncJobDispatched" as never, true as never);
       }
 
       const agentId = context?.requestContext?.get("agentId" as never) as unknown as string || "unknown";
