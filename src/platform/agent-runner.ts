@@ -318,6 +318,8 @@ export class AgentRunner {
         }
       }
 
+      const asyncJobDispatched = requestContext.get("_asyncJobDispatched" as never);
+
       // Hard-stop fallback: if many steps ran but result text is empty, the model
       // hit a limit (error gate, per-turn cap) without producing a final answer.
       // Ensure the user always gets something back.
@@ -328,9 +330,11 @@ export class AgentRunner {
         result = { ...result, text: fallback };
       }
 
-      // Stale response detection — retry once if response hash matches recent
+      // Stale response detection — retry once if response hash matches recent.
+      // Skip when an async job was dispatched — the confirmation message IS the
+      // expected response, and retrying would re-enter the agentic loop.
       const responseHash = this.simpleHash(result.text || "");
-      if (this.isStaleResponse(chatId, responseHash)) {
+      if (!asyncJobDispatched && this.isStaleResponse(chatId, responseHash)) {
         console.warn(`[${agentId}] stale response detected for ${chatId}, retrying...`);
         try { logger.warn("Stale response detected, retrying", { agent: agentId, chatType, chatId }); } catch { /* ignore */ }
         result = await this.agent.generate(
