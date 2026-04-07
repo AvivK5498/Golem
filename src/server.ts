@@ -1179,6 +1179,20 @@ Example 3 — Study Tutor:
       try {
         const newConfig = JSON.parse(body);
         deps.agentStore.updateConfig(id, newConfig);
+
+        // Sync runtime-critical fields to settings.db so they take effect without restart
+        if (deps.agentSettings) {
+          const s = deps.agentSettings.getStore();
+          if (newConfig.tools) s.set(id, "tools", JSON.stringify(newConfig.tools));
+          if (newConfig.skills) s.set(id, "skills", JSON.stringify(newConfig.skills));
+          if (newConfig.mcpServers) s.set(id, "mcp_servers", JSON.stringify(newConfig.mcpServers));
+          if (newConfig.allowedGroups) s.set(id, "allowed_groups", JSON.stringify(newConfig.allowedGroups));
+          if (newConfig.adminGroups) s.set(id, "admin_groups", JSON.stringify(newConfig.adminGroups));
+          if (newConfig.llm?.tier) s.set(id, "model_tier", newConfig.llm.tier);
+          if (newConfig.llm?.maxSteps) s.set(id, "llm.maxSteps", String(newConfig.llm.maxSteps));
+          if (newConfig.memory?.lastMessages) s.set(id, "last_messages", String(newConfig.memory.lastMessages));
+        }
+
         return json(res, { ok: true });
       } catch (err) { return json(res, { error: String(err) }, 400); }
     }
