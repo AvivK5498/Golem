@@ -404,8 +404,6 @@ function StepAgent({
   setAgentTier,
   ownerName,
   setOwnerName,
-  ownerRole,
-  setOwnerRole,
   selectedTools,
   setSelectedTools,
   selectedSkills,
@@ -424,8 +422,6 @@ function StepAgent({
   setAgentTier: (v: string) => void;
   ownerName: string;
   setOwnerName: (v: string) => void;
-  ownerRole: string;
-  setOwnerRole: (v: string) => void;
   selectedTools: string[];
   setSelectedTools: (v: string[]) => void;
   selectedSkills: string[];
@@ -491,25 +487,14 @@ function StepAgent({
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="owner-name">Your name</Label>
-              <Input
-                id="owner-name"
-                value={ownerName}
-                onChange={(e) => setOwnerName(e.target.value)}
-                placeholder="e.g., Alex"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="owner-role">Your role <span className="text-muted-foreground font-normal">(optional)</span></Label>
-              <Input
-                id="owner-role"
-                value={ownerRole}
-                onChange={(e) => setOwnerRole(e.target.value)}
-                placeholder="e.g., Software Engineer, Founder"
-              />
-            </div>
+          <div className="space-y-2">
+            <Label htmlFor="owner-name">Your name</Label>
+            <Input
+              id="owner-name"
+              value={ownerName}
+              onChange={(e) => setOwnerName(e.target.value)}
+              placeholder="e.g., Alex"
+            />
           </div>
 
           <div className="space-y-2">
@@ -755,7 +740,6 @@ export default function OnboardingPage() {
   const [agentDescription, setAgentDescription] = useState("");
   const [agentTier, setAgentTier] = useState("low");
   const [ownerName, setOwnerName] = useState("");
-  const [ownerRole, setOwnerRole] = useState("");
   const [selectedTools, setSelectedTools] = useState<string[]>(
     BUILTIN_TOOLS.filter((t) => t.default).map((t) => t.id)
   );
@@ -781,7 +765,6 @@ export default function OnboardingPage() {
           },
           groqApiKey: groqApiKey || undefined,
           ownerName: ownerName || undefined,
-          ownerRole: ownerRole || undefined,
           agent: {
             name: agentName,
             description: agentDescription,
@@ -818,7 +801,7 @@ export default function OnboardingPage() {
         {step === 2 && <StepTiers tiers={tiers} setTiers={setTiers} onNext={() => setStep(3)} onBack={() => setStep(1)} />}
         {step === 3 && <StepTelegram botToken={botToken} setBotToken={setBotToken} ownerId={ownerId} setOwnerId={setOwnerId} onNext={() => setStep(4)} onBack={() => setStep(2)} />}
         {step === 4 && <StepVoice groqApiKey={groqApiKey} setGroqApiKey={setGroqApiKey} onNext={() => setStep(5)} onBack={() => setStep(3)} />}
-        {step === 5 && <StepAgent agentName={agentName} setAgentName={setAgentName} agentDescription={agentDescription} setAgentDescription={setAgentDescription} agentTier={agentTier} setAgentTier={setAgentTier} ownerName={ownerName} setOwnerName={setOwnerName} ownerRole={ownerRole} setOwnerRole={setOwnerRole} selectedTools={selectedTools} setSelectedTools={setSelectedTools} selectedSkills={selectedSkills} setSelectedSkills={setSelectedSkills} selectedMcp={selectedMcp} setSelectedMcp={setSelectedMcp} onSubmit={handleCreateAgent} onBack={() => setStep(4)} submitting={submitting} />}
+        {step === 5 && <StepAgent agentName={agentName} setAgentName={setAgentName} agentDescription={agentDescription} setAgentDescription={setAgentDescription} agentTier={agentTier} setAgentTier={setAgentTier} ownerName={ownerName} setOwnerName={setOwnerName} selectedTools={selectedTools} setSelectedTools={setSelectedTools} selectedSkills={selectedSkills} setSelectedSkills={setSelectedSkills} selectedMcp={selectedMcp} setSelectedMcp={setSelectedMcp} onSubmit={handleCreateAgent} onBack={() => setStep(4)} submitting={submitting} />}
         {step === 6 && <StepDone agentName={agentName} />}
       </div>
     </div>

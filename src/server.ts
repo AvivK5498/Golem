@@ -300,7 +300,7 @@ export function startServer(deps: ServerDeps) {
                   description: body.agent.description,
                   role: "personal assistant",
                   ownerName: body.ownerName,
-                  ownerRole: body.ownerRole,
+                  ownerRole: body.ownerRole || undefined,
                 }),
               });
               if (personaRes.ok) {
