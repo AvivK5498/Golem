@@ -5,11 +5,12 @@ import type {
 } from "@mastra/core/processors";
 
 /**
- * Stops the agent loop after an async job (e.g., coding agent) is dispatched.
+ * Terminates the agent loop after an async job (e.g., coding agent) is dispatched.
  *
  * When a tool sets `_asyncJobDispatched` on the request context, this processor
- * forces toolChoice: "none" on the NEXT step, making the agent produce a final
- * text response and stop. The job result re-triggers the conversation later.
+ * strips all tools and forces toolChoice: "none" on the NEXT step, letting the
+ * model produce a final confirmation message and stop. The job result re-triggers
+ * the conversation later.
  */
 export class AsyncJobGuard implements Processor {
   readonly id = "async-job-guard";
@@ -22,12 +23,14 @@ export class AsyncJobGuard implements Processor {
     if (stepNumber === 0) return; // Let the dispatch step complete first
 
     return {
+      tools: {},
+      activeTools: [],
       toolChoice: "none",
       systemMessages: [
         ...args.systemMessages,
         {
           role: "system" as const,
-          content: "An async background job was dispatched. Do NOT call any more tools. Write a brief confirmation to the user and stop. The result will be delivered automatically when the job completes.",
+          content: "An async background job was dispatched. Write a brief confirmation to the user and stop. The result will be delivered automatically when the job completes.",
         },
       ],
     };
