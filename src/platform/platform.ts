@@ -285,26 +285,32 @@ function createPlatformAgent(params: {
     ...(hasSubAgents ? ["handoff_create", "handoff_read", "handoff_append"] : []),
   ];
 
+  // Read tools/skills/MCP from settings (source of truth) with config fallback
+  const resolvedToolIds = agentSettings.getTools(config.id)?.length ? agentSettings.getTools(config.id) : (config.tools || []);
+  const resolvedSkillNames = agentSettings.getSkills(config.id)?.length ? agentSettings.getSkills(config.id) : (config.skills || []);
+  const resolvedMcpServers = agentSettings.getMcpServers(config.id)?.length ? agentSettings.getMcpServers(config.id) : (config.mcpServers || []);
+
   // Separate workspace aliases from regular tool IDs
   const WORKSPACE_READ = "workspace_read";
   const WORKSPACE_WRITE = "workspace_write";
-  const hasWorkspaceRead = (config.tools || []).includes(WORKSPACE_READ);
-  const hasWorkspaceWrite = (config.tools || []).includes(WORKSPACE_WRITE);
+  const hasWorkspaceRead = resolvedToolIds.includes(WORKSPACE_READ);
+  const hasWorkspaceWrite = resolvedToolIds.includes(WORKSPACE_WRITE);
   const configWithFilteredTools = {
     ...config,
     tools: [
       ...new Set([
         ...ALWAYS_AVAILABLE_TOOLS,
-        ...(config.tools || []).filter(t => t !== WORKSPACE_READ && t !== WORKSPACE_WRITE),
+        ...resolvedToolIds.filter(t => t !== WORKSPACE_READ && t !== WORKSPACE_WRITE),
       ]),
     ],
+    mcpServers: resolvedMcpServers,
   };
 
   const agentTools = resolveAgentTools(configWithFilteredTools, tools, mcpToolFilters);
   const toolCount = Object.keys(agentTools).length;
 
   // Resolve skills to workspace if configured
-  const skillPaths = resolveSkillPaths(config.skills || []);
+  const skillPaths = resolveSkillPaths(resolvedSkillNames);
   const hasSkills = skillPaths.length > 0;
   const needsWorkspace = hasSkills || hasWorkspaceRead || hasWorkspaceWrite;
   console.log(`[platform] agent "${config.id}" gets ${toolCount} tools${hasSkills ? `, ${skillPaths.length} skills` : ""}${needsWorkspace ? ` (workspace: ${hasWorkspaceWrite ? "read-write" : "read-only"})` : ""} [model: ${config.llm?.model || "default"}]`);
@@ -332,7 +338,7 @@ function createPlatformAgent(params: {
         characterName: config.characterName,
         ownerName: config.ownerName,
         role: config.role,
-        lastMessages: config.memory.lastMessages,
+        lastMessages: agentSettings.getLastMessages(config.id) ?? config.memory.lastMessages,
         isGroup,
         behavior,
       });
@@ -437,7 +443,7 @@ For single sub-agent tasks, skip the handoff file.`;
       new GroupIdentityProcessor(config.characterName || config.name, config.role),
     ],
     defaultOptions: {
-      maxSteps: config.llm.maxSteps ?? 50,
+      maxSteps: agentSettings.getMaxSteps(config.id) ?? config.llm.maxSteps ?? 50,
     },
   };
 
@@ -541,7 +547,9 @@ function registerAgentTransport(
 
     // ── 2. Chat classification + admin group promotion ───────
     let chatType = runner.classifyMessage(msg);
-    if (chatType === "group" && config.adminGroups?.includes(msg.from.id)) {
+    const runtimeAdminGroups = deps.agentSettings.getAdminGroups(config.id);
+    const runtimeAllowedGroups = deps.agentSettings.getAllowedGroups(config.id);
+    if (chatType === "group" && runtimeAdminGroups.includes(msg.from.id)) {
       chatType = "owner";
     }
 
@@ -567,8 +575,8 @@ function registerAgentTransport(
     }
 
     // ── 3. Access gate (per-agent allowedGroups) ──────────────
-    if (config.allowedGroups.length > 0) {
-      if (chatType !== "owner" && (chatType !== "group" || !config.allowedGroups.includes(msg.from.id))) {
+    if (runtimeAllowedGroups.length > 0) {
+      if (chatType !== "owner" && (chatType !== "group" || !runtimeAllowedGroups.includes(msg.from.id))) {
         return;
       }
     } else if (chatType !== "owner") {

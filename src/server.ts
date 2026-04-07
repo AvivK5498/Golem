@@ -1084,7 +1084,7 @@ Example 3 — Study Tutor:
             const cronCount = deps.cronStore ? deps.cronStore.listCrons(agentId).length : 0;
             // Resolve: override > tier > legacy model > unknown
             const agentGlobalTiers = deps.agentSettings?.getGlobalTiers() || {};
-            const agentTierKey = cfg.llm?.tier || "low";
+            const agentTierKey = deps.agentSettings?.getActiveTier(agentId) || cfg.llm?.tier || "low";
             const model = cfg.llm?.override || agentGlobalTiers[agentTierKey] || cfg.llm?.model || "unknown";
 
             const warnings: string[] = [];
@@ -1105,7 +1105,7 @@ Example 3 — Study Tutor:
               enabled: cfg.enabled !== false,
               connected,
               model,
-              toolCount: (cfg.tools?.length || 0) + (cfg.mcpServers?.length || 0),
+              toolCount: (deps.agentSettings?.getTools(agentId)?.length || cfg.tools?.length || 0) + (deps.agentSettings?.getMcpServers(agentId)?.length || cfg.mcpServers?.length || 0),
               cronCount,
               warnings,
             });
@@ -1148,7 +1148,7 @@ Example 3 — Study Tutor:
       }
       // Resolve the actual model being used: override > tier > fallback
       const globalTiers = deps.agentSettings?.getGlobalTiers() || {};
-      const tierKey = config.llm?.tier || "low";
+      const tierKey = deps.agentSettings?.getActiveTier(id) || config.llm?.tier || "low";
       const resolvedModel = config.llm?.override || globalTiers[tierKey] || config.llm?.model || "unknown";
       // Add resolved model to response for UI display
       config.llm._resolvedModel = resolvedModel;

@@ -180,7 +180,7 @@ export class AgentRunner {
     }
 
     const isBackgroundRun = promptMode === "autonomous";
-    const maxSteps = this.config.llm.maxSteps ?? 50;
+    const maxSteps = this.agentSettings?.getMaxSteps(agentId) ?? this.config.llm.maxSteps ?? 50;
 
     try {
       const startMs = Date.now();
@@ -389,8 +389,8 @@ export class AgentRunner {
   classifyMessage(msg: IncomingMessage): ChatType {
     return classifyChat(msg.from, {
       ownerId: this.config.transport.ownerId,
-      allowedGroups: this.config.allowedGroups,
-      adminGroups: this.config.adminGroups,
+      allowedGroups: this.agentSettings?.getAllowedGroups(this.config.id) || this.config.allowedGroups,
+      adminGroups: this.agentSettings?.getAdminGroups(this.config.id) || this.config.adminGroups,
     });
   }
 
