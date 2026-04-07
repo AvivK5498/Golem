@@ -60,6 +60,7 @@ import { GroupIdentityProcessor, stripGroupIdentityTag } from "../agent/processo
 import { ImageStripperProcessor } from "../agent/processors/image-stripper-processor.js";
 import { ReasoningStripperProcessor } from "../agent/processors/reasoning-stripper-processor.js";
 import { ToolErrorGate } from "../agent/processors/tool-error-gate.js";
+import { AsyncJobGuard } from "../agent/processors/async-job-guard.js";
 import { setAllowedBinaries } from "../agent/tools/run-command-tool.js";
 import fs from "node:fs";
 import path from "node:path";
@@ -433,6 +434,7 @@ For single sub-agent tasks, skip the handoff file.`;
     tools: agentTools,
     inputProcessors: [
       new ImageStripperProcessor(),       // Strip base64 images from recalled history
+      new AsyncJobGuard(),              // Stop loop after async job dispatch (e.g., coding agent)
       new ToolCallFilter(),             // Strip tool calls/results from recalled history (saves tokens)
       new TokenLimiterProcessor(170_000), // Prevent context overflow
       new ToolErrorGate(),              // Strip tools after repeated errors to force synthesis
