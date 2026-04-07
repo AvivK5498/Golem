@@ -50,7 +50,8 @@ import { parseApprovalButtonText, loadPendingToolApproval, updatePendingToolAppr
 import { executeApprovedTool } from "../agent/tool-approval-executor.js";
 import { transcribeAudio, type WhisperConfig } from "../media/transcribe.js";
 import { uploadToTmpFiles } from "../media/upload.js";
-import { loadConfig, expandEnvVars, type AppConfig } from "../config.js";
+import { expandEnvVars } from "../config.js";
+import yaml from "yaml";
 import { registerGlobalCronStore } from "../agent/tools/cron-tool.js";
 import { startServer } from "../server.js";
 import { buildPlatformPromptSections, buildPlatformSystemPrompt, buildGroupChatContext } from "./instructions.js";
@@ -257,17 +258,21 @@ function resolveAgentTools(
   return filtered;
 }
 
-/** Build a map of MCP server name → allowed tool names from global config */
-function buildMcpToolFilters(config: AppConfig): Map<string, Set<string>> {
+/** Build a map of MCP server name → allowed tool names from mcp-servers.yaml */
+function buildMcpToolFilters(): Map<string, Set<string>> {
   const filters = new Map<string, Set<string>>();
-  const servers = config.mcp?.servers || {};
-  for (const [name, serverConfig] of Object.entries(servers)) {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- tools field may exist in raw config
-    const toolsList = (serverConfig as any)?.tools as string[] | undefined;
-    if (toolsList && Array.isArray(toolsList)) {
-      filters.set(name, new Set(toolsList));
+  try {
+    const raw = fs.readFileSync("mcp-servers.yaml", "utf-8");
+    const parsed = yaml.parse(raw) as { servers?: Record<string, unknown> } | null;
+    const servers = parsed?.servers || {};
+    for (const [name, serverConfig] of Object.entries(servers)) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const toolsList = (serverConfig as any)?.tools as string[] | undefined;
+      if (toolsList && Array.isArray(toolsList)) {
+        filters.set(name, new Set(toolsList));
+      }
     }
-  }
+  } catch { /* no mcp-servers.yaml or invalid — no filters */ }
   return filters;
 }
 
@@ -291,10 +296,10 @@ function createPlatformAgent(params: {
     ...(hasSubAgents ? ["handoff_create", "handoff_read", "handoff_append"] : []),
   ];
 
-  // Read tools/skills/MCP from settings (source of truth) with config fallback
-  const resolvedToolIds = agentSettings.getTools(config.id)?.length ? agentSettings.getTools(config.id) : (config.tools || []);
-  const resolvedSkillNames = agentSettings.getSkills(config.id)?.length ? agentSettings.getSkills(config.id) : (config.skills || []);
-  const resolvedMcpServers = agentSettings.getMcpServers(config.id)?.length ? agentSettings.getMcpServers(config.id) : (config.mcpServers || []);
+  // Read tools/skills/MCP exclusively from settings.db (source of truth)
+  const resolvedToolIds = agentSettings.getTools(config.id);
+  const resolvedSkillNames = agentSettings.getSkills(config.id);
+  const resolvedMcpServers = agentSettings.getMcpServers(config.id);
 
   // Separate workspace aliases from regular tool IDs
   const WORKSPACE_READ = "workspace_read";
@@ -344,7 +349,7 @@ function createPlatformAgent(params: {
         characterName: config.characterName,
         ownerName: config.ownerName,
         role: config.role,
-        lastMessages: agentSettings.getLastMessages(config.id) ?? config.memory.lastMessages,
+        lastMessages: agentSettings.getLastMessages(config.id) ?? 12,
         isGroup,
         behavior,
       });
@@ -398,7 +403,7 @@ For single sub-agent tasks, skip the handoff file.`;
           if (isGroup && rJid) {
             const allConfigs = registry.getAll();
             const otherAgents = allConfigs
-              .filter(c => c.id !== config.id && c.allowedGroups.includes(rJid))
+              .filter(c => c.id !== config.id && agentSettings.getAllowedGroups(c.id).includes(rJid!))
               .map(c => ({
                 name: c.characterName || c.name,
                 description: c.description,
@@ -426,11 +431,11 @@ For single sub-agent tasks, skip the handoff file.`;
     model: ({ requestContext }: { requestContext?: { get: (key: string) => unknown } }) => {
       const globalTiers = agentSettings.getGlobalTiers() || {};
       const id = requestContext?.get("agentId") as string | undefined;
-      // Resolve: override > tier > fallback
-      const override = config.llm.override;
-      const tierKey = (id && agentSettings.getActiveTier(id)) || config.llm.tier || "low";
-      const modelId = override || globalTiers[tierKey] || config.llm.model || "anthropic/claude-haiku-4-5";
-      const effort = (id && agentSettings.getReasoningEffort(id)) || config.llm.reasoningEffort;
+      // Resolve: override (settings) > tier (settings) > fallback
+      const override = id ? agentSettings.getModel(id) : null;
+      const tierKey = (id && agentSettings.getActiveTier(id)) || "low";
+      const modelId = override || globalTiers[tierKey] || "anthropic/claude-haiku-4-5";
+      const effort = id ? agentSettings.getReasoningEffort(id) : null;
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       return getModelForId(modelId, { reasoningEffort: effort as any });
     },
@@ -450,7 +455,7 @@ For single sub-agent tasks, skip the handoff file.`;
       new GroupIdentityProcessor(config.characterName || config.name, config.role),
     ],
     defaultOptions: {
-      maxSteps: agentSettings.getMaxSteps(config.id) ?? config.llm.maxSteps ?? 50,
+      maxSteps: agentSettings.getMaxSteps(config.id) ?? 30,
     },
   };
 
@@ -839,9 +844,8 @@ export async function startPlatform(): Promise<PlatformContext> {
     ...getMCPTools(),
   };
 
-  // 3b. Load global config + build per-MCP-server tool filters
-  const globalConfig = loadConfig();
-  const mcpToolFilters = buildMcpToolFilters(globalConfig);
+  // 3b. Build per-MCP-server tool filters from mcp-servers.yaml
+  const mcpToolFilters = buildMcpToolFilters();
 
   // 4. Initialize stores
   const cronStore = new CronStore(dataPath("crons.db"));
@@ -857,11 +861,7 @@ export async function startPlatform(): Promise<PlatformContext> {
   registry.loadAll();
 
   const agentConfigs = registry.getAll();
-  agentSettings.seedGlobalDefaults(globalConfig);
   setAllowedBinaries(agentSettings.getAllowedBinaries());
-  for (const config of agentConfigs) {
-    agentSettings.seedFromConfig(config);
-  }
   if (agentConfigs.length === 0) {
     console.log("[platform] no agents configured yet — create one via the web UI at http://localhost:3015");
   }
@@ -933,14 +933,10 @@ export async function startPlatform(): Promise<PlatformContext> {
   }
 
   // 8. Initialize Mastra with observability (Phoenix tracing)
-  // Read from SQLite settings (primary) with config.yaml fallback
-  const phoenixEnabled = agentSettings.getGlobal("global.observability.enabled") === "true"
-    || globalConfig.observability?.phoenix?.enabled === true;
-  const phoenixEndpoint = agentSettings.getGlobal("global.observability.endpoint")
-    || globalConfig.observability?.phoenix?.endpoint;
-  const phoenixProject = agentSettings.getGlobal("global.observability.projectName")
-    || globalConfig.observability?.phoenix?.projectName;
-  const phoenixService = globalConfig.observability?.phoenix?.serviceName || "golem-agent";
+  const phoenixEnabled = agentSettings.getGlobal("global.observability.enabled") === "true";
+  const phoenixEndpoint = agentSettings.getGlobal("global.observability.endpoint");
+  const phoenixProject = agentSettings.getGlobal("global.observability.projectName");
+  const phoenixService = "golem-agent";
 
   let observability: Observability | undefined;
   if (phoenixEnabled) {
@@ -954,7 +950,7 @@ export async function startPlatform(): Promise<PlatformContext> {
         phoenix: {
           serviceName: phoenixService,
           exporters: [exporter],
-          includeInternalSpans: globalConfig.observability?.phoenix?.includeInternalSpans ?? false,
+          includeInternalSpans: false,
         },
       },
     });
@@ -1022,7 +1018,7 @@ export async function startPlatform(): Promise<PlatformContext> {
 
   // 11. HTTP server with agent-scoped webhook routing
   // Routes: /hooks/{agentId}/{source} with scenario classification
-  const configuredDefault = globalConfig.defaultAgent;
+  const configuredDefault = agentSettings.getDefaultAgent();
   const defaultAgentId = configuredDefault && runners.has(configuredDefault)
     ? configuredDefault
     : agentConfigs[0]?.id;

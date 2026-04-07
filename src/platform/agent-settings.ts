@@ -6,7 +6,6 @@
  * Identity fields (id, name, transport) stay in YAML — this only covers behavior.
  */
 import type { SettingsStore } from "../scheduler/settings-store.js";
-import type { AgentRegistryConfig } from "./schemas.js";
 
 // ── Behavior config type ───────────────────────────────────
 
@@ -145,50 +144,7 @@ export class AgentSettings {
     return obj;
   }
 
-  /**
-   * Seed global settings from config.yaml on first run.
-   * Only writes keys that don't already exist (idempotent).
-   */
-  seedGlobalDefaults(config: {
-    defaultAgent?: string;
-    llm?: { tiers?: Record<string, string>; nano?: { model: string } };
-    observability?: { phoenix?: { enabled?: boolean; endpoint?: string; projectName?: string } };
-    webhooks?: { enabled?: boolean; token?: string; tunnel?: { domain?: string } };
-    whisper?: { enabled?: boolean; apiKey?: string; endpoint?: string; model?: string; timeoutMs?: number };
-    server?: { port?: number };
-  }): void {
-    const s = this.store;
-    const G = GLOBAL_SETTINGS_KEYS;
-
-    if (config.defaultAgent) s.setIfMissing(GLOBAL_ID, G.DEFAULT_AGENT, config.defaultAgent);
-    if (config.llm?.tiers) s.setIfMissing(GLOBAL_ID, G.LLM_TIERS, JSON.stringify(config.llm.tiers));
-    if (config.llm?.nano?.model) s.setIfMissing(GLOBAL_ID, G.LLM_NANO_MODEL, config.llm.nano.model);
-
-    const phoenix = config.observability?.phoenix;
-    if (phoenix) {
-      s.setIfMissing(GLOBAL_ID, G.OBSERVABILITY_ENABLED, String(phoenix.enabled ?? false));
-      if (phoenix.endpoint) s.setIfMissing(GLOBAL_ID, G.OBSERVABILITY_ENDPOINT, phoenix.endpoint);
-      if (phoenix.projectName) s.setIfMissing(GLOBAL_ID, G.OBSERVABILITY_PROJECT, phoenix.projectName);
-    }
-
-    const wh = config.webhooks;
-    if (wh) {
-      s.setIfMissing(GLOBAL_ID, G.WEBHOOKS_ENABLED, String(wh.enabled ?? false));
-      if (wh.token) s.setIfMissing(GLOBAL_ID, G.WEBHOOKS_TOKEN, wh.token);
-      if (wh.tunnel?.domain) s.setIfMissing(GLOBAL_ID, G.WEBHOOKS_TUNNEL_DOMAIN, wh.tunnel.domain);
-    }
-
-    const w = config.whisper;
-    if (w) {
-      s.setIfMissing(GLOBAL_ID, G.WHISPER_ENABLED, String(w.enabled ?? false));
-      if (w.apiKey) s.setIfMissing(GLOBAL_ID, G.WHISPER_API_KEY, w.apiKey);
-      if (w.endpoint) s.setIfMissing(GLOBAL_ID, G.WHISPER_ENDPOINT, w.endpoint);
-      if (w.model) s.setIfMissing(GLOBAL_ID, G.WHISPER_MODEL, w.model);
-      if (w.timeoutMs) s.setIfMissing(GLOBAL_ID, G.WHISPER_TIMEOUT, String(w.timeoutMs));
-    }
-
-    if (config.server?.port) s.setIfMissing(GLOBAL_ID, G.SERVER_PORT, String(config.server.port));
-  }
+  // seedGlobalDefaults removed — global settings are written directly by POST /api/setup and PATCH /api/settings
 
   // ── Global convenience getters ─────────────────────────
 
@@ -392,72 +348,70 @@ export class AgentSettings {
     return this.store.getAll(agentId);
   }
 
-  // ── Seeding from YAML config ────────────────────────────
+  // ── Write runtime settings for a new agent ─────────────
 
   /**
-   * Seed SQLite settings from a per-agent YAML config.
-   * Only writes keys that don't already exist (idempotent first-run seed).
-   * Call once per agent at platform startup.
+   * Write all runtime settings for a newly created agent.
+   * Uses set() not setIfMissing() — these are explicit user choices.
    */
-  seedFromConfig(config: AgentRegistryConfig): void {
-    const id = config.id;
+  writeRuntimeDefaults(agentId: string, opts: {
+    tier?: string;
+    override?: string | null;
+    temperature?: number;
+    maxSteps?: number;
+    reasoningEffort?: string;
+    lastMessages?: number;
+    semanticRecall?: boolean;
+    workingMemory?: { enabled: boolean; scope: string };
+    observational?: { enabled: boolean; model?: string; scope?: string };
+    tools?: string[];
+    skills?: string[];
+    mcpServers?: string[];
+    allowedGroups?: string[];
+    adminGroups?: string[];
+  }): void {
     const s = this.store;
 
-    // LLM — tier-based model selection
-    s.setIfMissing(id, SETTINGS_KEYS.MODEL_TIER, config.llm.tier || "low");
-    if (config.llm.override) {
-      s.setIfMissing(id, SETTINGS_KEYS.LLM_MODEL, config.llm.override);
-    } else if (config.llm.model) {
-      // Legacy: seed model field for backwards compat
-      s.setIfMissing(id, SETTINGS_KEYS.LLM_MODEL, config.llm.model);
+    // LLM
+    s.set(agentId, SETTINGS_KEYS.MODEL_TIER, opts.tier || "low");
+    if (opts.override) {
+      s.set(agentId, SETTINGS_KEYS.LLM_MODEL, opts.override);
+    } else {
+      // Clear any stale override so tier resolution takes precedence
+      s.delete(agentId, SETTINGS_KEYS.LLM_MODEL);
     }
-    s.setIfMissing(id, SETTINGS_KEYS.LLM_TEMPERATURE, String(config.llm.temperature));
-    s.setIfMissing(id, SETTINGS_KEYS.LLM_MAX_STEPS, String(config.llm.maxSteps));
-    if (config.llm.reasoningEffort) {
-      s.setIfMissing(id, SETTINGS_KEYS.LLM_REASONING_EFFORT, config.llm.reasoningEffort);
-    }
+    s.set(agentId, SETTINGS_KEYS.LLM_TEMPERATURE, String(opts.temperature ?? 0.2));
+    s.set(agentId, SETTINGS_KEYS.LLM_MAX_STEPS, String(opts.maxSteps ?? 30));
+    if (opts.reasoningEffort) s.set(agentId, SETTINGS_KEYS.LLM_REASONING_EFFORT, opts.reasoningEffort);
+
     // Memory
-    s.setIfMissing(id, SETTINGS_KEYS.MEMORY_LAST_MESSAGES, String(config.memory.lastMessages));
-    s.setIfMissing(id, SETTINGS_KEYS.MEMORY_SEMANTIC_RECALL, String(config.memory.semanticRecall));
-    if (config.memory.observational) {
-      s.setIfMissing(id, SETTINGS_KEYS.MEMORY_OBSERVATIONAL_ENABLED, String(config.memory.observational.enabled));
-      if (config.memory.observational.model) {
-        s.setIfMissing(id, SETTINGS_KEYS.MEMORY_OBSERVATIONAL_MODEL, config.memory.observational.model);
-      }
-      if (config.memory.observational.scope) {
-        s.setIfMissing(id, SETTINGS_KEYS.MEMORY_OBSERVATIONAL_SCOPE, config.memory.observational.scope);
-      }
+    s.set(agentId, SETTINGS_KEYS.MEMORY_LAST_MESSAGES, String(opts.lastMessages ?? 12));
+    s.set(agentId, SETTINGS_KEYS.MEMORY_SEMANTIC_RECALL, String(opts.semanticRecall ?? false));
+    if (opts.workingMemory) {
+      s.set(agentId, SETTINGS_KEYS.MEMORY_WORKING_MEMORY_ENABLED, String(opts.workingMemory.enabled));
+      s.set(agentId, SETTINGS_KEYS.MEMORY_WORKING_MEMORY_SCOPE, opts.workingMemory.scope);
     }
-    if (config.memory.workingMemory) {
-      s.setIfMissing(id, SETTINGS_KEYS.MEMORY_WORKING_MEMORY_ENABLED, String(config.memory.workingMemory.enabled));
-      s.setIfMissing(id, SETTINGS_KEYS.MEMORY_WORKING_MEMORY_SCOPE, config.memory.workingMemory.scope);
+    if (opts.observational) {
+      s.set(agentId, SETTINGS_KEYS.MEMORY_OBSERVATIONAL_ENABLED, String(opts.observational.enabled));
+      if (opts.observational.model) s.set(agentId, SETTINGS_KEYS.MEMORY_OBSERVATIONAL_MODEL, opts.observational.model);
+      if (opts.observational.scope) s.set(agentId, SETTINGS_KEYS.MEMORY_OBSERVATIONAL_SCOPE, opts.observational.scope);
     }
 
     // Access control
-    if (config.allowedGroups.length > 0) {
-      s.setIfMissing(id, SETTINGS_KEYS.ALLOWED_GROUPS, JSON.stringify(config.allowedGroups));
-    }
-    if (config.adminGroups.length > 0) {
-      s.setIfMissing(id, SETTINGS_KEYS.ADMIN_GROUPS, JSON.stringify(config.adminGroups));
-    }
+    s.setJson(agentId, SETTINGS_KEYS.ALLOWED_GROUPS, opts.allowedGroups ?? []);
+    s.setJson(agentId, SETTINGS_KEYS.ADMIN_GROUPS, opts.adminGroups ?? []);
 
     // Tools & skills
-    if (config.tools.length > 0) {
-      s.setIfMissing(id, SETTINGS_KEYS.TOOLS, JSON.stringify(config.tools));
-    }
-    if (config.skills.length > 0) {
-      s.setIfMissing(id, SETTINGS_KEYS.SKILLS, JSON.stringify(config.skills));
-    }
-    if (config.mcpServers.length > 0) {
-      s.setIfMissing(id, SETTINGS_KEYS.MCP_SERVERS, JSON.stringify(config.mcpServers));
-    }
+    s.setJson(agentId, SETTINGS_KEYS.TOOLS, opts.tools ?? []);
+    s.setJson(agentId, SETTINGS_KEYS.SKILLS, opts.skills ?? []);
+    s.setJson(agentId, SETTINGS_KEYS.MCP_SERVERS, opts.mcpServers ?? []);
 
     // Behavior defaults
-    s.setIfMissing(id, SETTINGS_KEYS.BEHAVIOR_RESPONSE_LENGTH, BEHAVIOR_DEFAULTS.responseLength);
-    s.setIfMissing(id, SETTINGS_KEYS.BEHAVIOR_AGENCY, BEHAVIOR_DEFAULTS.agency);
-    s.setIfMissing(id, SETTINGS_KEYS.BEHAVIOR_TONE, BEHAVIOR_DEFAULTS.tone);
-    s.setIfMissing(id, SETTINGS_KEYS.BEHAVIOR_FORMAT, BEHAVIOR_DEFAULTS.format);
-    s.setIfMissing(id, SETTINGS_KEYS.BEHAVIOR_LANGUAGE, BEHAVIOR_DEFAULTS.language);
+    s.set(agentId, SETTINGS_KEYS.BEHAVIOR_RESPONSE_LENGTH, BEHAVIOR_DEFAULTS.responseLength);
+    s.set(agentId, SETTINGS_KEYS.BEHAVIOR_AGENCY, BEHAVIOR_DEFAULTS.agency);
+    s.set(agentId, SETTINGS_KEYS.BEHAVIOR_TONE, BEHAVIOR_DEFAULTS.tone);
+    s.set(agentId, SETTINGS_KEYS.BEHAVIOR_FORMAT, BEHAVIOR_DEFAULTS.format);
+    s.set(agentId, SETTINGS_KEYS.BEHAVIOR_LANGUAGE, BEHAVIOR_DEFAULTS.language);
   }
 
   // ── Internal helpers ────────────────────────────────────

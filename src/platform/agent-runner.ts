@@ -167,10 +167,10 @@ export class AgentRunner {
     // Tiers are global — resolved from settings
     const globalTiers = this.agentSettings?.getGlobalTiers();
     if (globalTiers) requestContext.set("modelTiers", globalTiers);
-    // Default model: override > tier resolution > fallback
-    const override = this.config.llm.override;
-    const tierKey = this.agentSettings?.getActiveTier(agentId) || this.config.llm.tier || "low";
-    const resolvedModel = override || (globalTiers && globalTiers[tierKey]) || this.config.llm.model || "anthropic/claude-haiku-4-5";
+    // Default model: override (settings) > tier (settings) > fallback
+    const override = this.agentSettings?.getModel(agentId);
+    const tierKey = this.agentSettings?.getActiveTier(agentId) || "low";
+    const resolvedModel = override || (globalTiers && globalTiers[tierKey]) || "anthropic/claude-haiku-4-5";
     requestContext.set("defaultModel", resolvedModel);
     if (options.sender) {
       requestContext.set("sender", options.sender);
@@ -180,7 +180,7 @@ export class AgentRunner {
     }
 
     const isBackgroundRun = promptMode === "autonomous";
-    const maxSteps = this.agentSettings?.getMaxSteps(agentId) ?? this.config.llm.maxSteps ?? 50;
+    const maxSteps = this.agentSettings?.getMaxSteps(agentId) ?? 30;
 
     try {
       const startMs = Date.now();
@@ -389,8 +389,8 @@ export class AgentRunner {
   classifyMessage(msg: IncomingMessage): ChatType {
     return classifyChat(msg.from, {
       ownerId: this.config.transport.ownerId,
-      allowedGroups: this.agentSettings?.getAllowedGroups(this.config.id) || this.config.allowedGroups,
-      adminGroups: this.agentSettings?.getAdminGroups(this.config.id) || this.config.adminGroups,
+      allowedGroups: this.agentSettings?.getAllowedGroups(this.config.id) ?? [],
+      adminGroups: this.agentSettings?.getAdminGroups(this.config.id) ?? [],
     });
   }
 

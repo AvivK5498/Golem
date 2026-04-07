@@ -983,7 +983,7 @@ function ProactiveTab({ agentId, settingsData, refetchSettings }: {
       });
       if (res.ok) {
         refetchSettings();
-        toast.success("Proactive settings saved");
+        toast.success("Changes applied");
       } else {
         toast.error("Failed to save");
       }
@@ -1192,6 +1192,17 @@ export default function AgentEditPage({ params }: { params: Promise<{ id: string
     setBehaviorFormat(settingsData["behavior.format"] || "conversational");
     setBehaviorLanguage(settingsData["behavior.language"] || "auto_detect");
     setBehaviorCustomInstructions(settingsData["behavior.customInstructions"] || "");
+    // Runtime fields from settings.db (override config defaults when present)
+    if (settingsData["tools"]) try { setSelectedTools(JSON.parse(settingsData["tools"])); } catch {}
+    if (settingsData["skills"]) try { setSelectedSkills(JSON.parse(settingsData["skills"])); } catch {}
+    if (settingsData["mcp_servers"]) try { setSelectedMcp(JSON.parse(settingsData["mcp_servers"])); } catch {}
+    if (settingsData["memory.lastMessages"]) setLastMessages(Number(settingsData["memory.lastMessages"]) || 12);
+    if (settingsData["memory.workingMemory.enabled"] !== undefined) setWmEnabled(settingsData["memory.workingMemory.enabled"] === "true");
+    if (settingsData["memory.workingMemory.scope"]) setWmScope(settingsData["memory.workingMemory.scope"]);
+    if (settingsData["llm.temperature"]) setTemperature(Number(settingsData["llm.temperature"]) || 0.2);
+    if (settingsData["llm.maxSteps"]) setMaxSteps(Number(settingsData["llm.maxSteps"]) || 50);
+    if (settingsData["allowedGroups"]) setAllowedGroups(settingsData["allowedGroups"]);
+    if (settingsData["adminGroups"]) setAdminGroups(settingsData["adminGroups"]);
   }, [settingsData]);
 
   useEffect(() => {
@@ -1227,46 +1238,142 @@ export default function AgentEditPage({ params }: { params: Promise<{ id: string
     setAdminGroups((c.adminGroups || []).join(", "));
   }, [data]);
 
-  async function saveConfig() {
+  /** Save identity fields to agents.db (requires restart) */
+  async function saveIdentity() {
     if (!data) return;
     setSaving(true);
     try {
       const updated = {
-        ...data.config,
         name,
         description,
         ...(characterName && { characterName }),
         ...(ownerName && { ownerName }),
         ...(role && { role }),
-        llm: {
-          provider,
-          model,
-          temperature,
-          maxSteps,
-          ...(visionModel ? { vision: { model: visionModel } } : {}),
-        },
-        tools: selectedTools,
-        skills: selectedSkills,
-        mcpServers: selectedMcp,
-        memory: {
-          lastMessages,
-          workingMemory: { enabled: wmEnabled, scope: wmScope },
-        },
+        enabled: data.config.enabled,
         transport: {
           ...data.config.transport,
           ownerId,
           ...(botToken !== data.config.transport.botToken ? { botToken } : {}),
         },
-        allowedGroups: allowedGroups.split(",").map(s => s.trim()).filter(Boolean),
-        adminGroups: adminGroups.split(",").map(s => s.trim()).filter(Boolean),
       };
       const res = await fetch(`/api/platform/agents/${id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(updated),
       });
-      if (res.ok) toast.success("Config saved -- restart to apply");
+      if (res.ok) toast.success("Saved -- restart to apply");
       else toast.error("Failed to save config");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  /** Save tools/skills/mcpServers to settings.db (immediate effect) */
+  async function saveToolsSettings() {
+    setSaving(true);
+    try {
+      const res = await fetch(`/api/platform/agents/${id}/settings`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          tools: JSON.stringify(selectedTools),
+          skills: JSON.stringify(selectedSkills),
+          mcpServers: JSON.stringify(selectedMcp),
+        }),
+      });
+      if (res.ok) {
+        refetchSettings();
+        toast.success("Changes applied");
+      } else toast.error("Failed to save tools");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  /** Save memory settings to settings.db (immediate effect) */
+  async function saveMemorySettings() {
+    setSaving(true);
+    try {
+      const res = await fetch(`/api/platform/agents/${id}/settings`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          "memory.lastMessages": lastMessages,
+          "memory.workingMemory.enabled": wmEnabled,
+          "memory.workingMemory.scope": wmScope,
+        }),
+      });
+      if (res.ok) {
+        refetchSettings();
+        toast.success("Changes applied");
+      } else toast.error("Failed to save memory settings");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  /** Save model settings (temperature, maxSteps) to settings.db (immediate effect) */
+  async function saveModelSettings() {
+    setSaving(true);
+    try {
+      const res = await fetch(`/api/platform/agents/${id}/settings`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          "llm.temperature": temperature,
+          "llm.maxSteps": maxSteps,
+        }),
+      });
+      if (res.ok) {
+        refetchSettings();
+        toast.success("Changes applied");
+      } else toast.error("Failed to save model settings");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  /** Save Telegram identity (botToken, ownerId) to agents.db */
+  async function saveTelegramIdentity() {
+    if (!data) return;
+    setSaving(true);
+    try {
+      const updated = {
+        ...data.config,
+        transport: {
+          ...data.config.transport,
+          ownerId,
+          ...(botToken !== data.config.transport.botToken ? { botToken } : {}),
+        },
+      };
+      const res = await fetch(`/api/platform/agents/${id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(updated),
+      });
+      if (res.ok) toast.success("Saved -- restart to apply");
+      else toast.error("Failed to save transport config");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  /** Save Telegram runtime settings (groups) to settings.db */
+  async function saveTelegramRuntime() {
+    setSaving(true);
+    try {
+      const res = await fetch(`/api/platform/agents/${id}/settings`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          allowedGroups: allowedGroups,
+          adminGroups: adminGroups,
+        }),
+      });
+      if (res.ok) {
+        refetchSettings();
+        toast.success("Changes applied");
+      } else toast.error("Failed to save group settings");
     } finally {
       setSaving(false);
     }
@@ -1288,7 +1395,7 @@ export default function AgentEditPage({ params }: { params: Promise<{ id: string
         }),
       });
       if (res.ok) {
-        toast.success("Behavior saved");
+        toast.success("Changes applied");
         refetchSettings();
       } else toast.error("Failed to save behavior");
     } finally {
@@ -1302,7 +1409,7 @@ export default function AgentEditPage({ params }: { params: Promise<{ id: string
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ content }),
     });
-    if (res.ok) toast.success(`${type} saved`);
+    if (res.ok) toast.success("Saved -- restart to apply");
     else toast.error(`Failed to save ${type}`);
   }
 
@@ -1314,7 +1421,7 @@ export default function AgentEditPage({ params }: { params: Promise<{ id: string
     });
     if (res.ok) {
       refetchSettings();
-      toast.success("Setting updated");
+      toast.success("Changes applied");
     } else {
       toast.error("Failed to update setting");
     }
@@ -1494,8 +1601,8 @@ export default function AgentEditPage({ params }: { params: Promise<{ id: string
 
                 {/* Sticky save footer */}
                 <div className="sticky bottom-0 z-20 mt-6 flex items-center justify-between border-t border-border/60 bg-background/80 px-0 py-3 backdrop-blur">
-                  <span className="text-xs text-muted-foreground">Changes are saved per section</span>
-                  <Button onClick={saveConfig} disabled={saving} size="sm">{saving ? "Saving..." : "Save Config"}</Button>
+                  <span className="text-xs text-muted-foreground">Identity changes require restart</span>
+                  <Button onClick={saveIdentity} disabled={saving} size="sm">{saving ? "Saving..." : "Save Identity"}</Button>
                 </div>
               </>
             )}
@@ -1596,13 +1703,11 @@ export default function AgentEditPage({ params }: { params: Promise<{ id: string
                         <input type="number" value={maxSteps} onChange={e => setMaxSteps(Number(e.target.value))} min={1} max={100} className={numberInputClass} />
                       </div>
                     </div>
+                    <div className="flex justify-end pt-2">
+                      <Button onClick={saveModelSettings} disabled={saving} size="sm">{saving ? "Saving..." : "Save Model Settings"}</Button>
+                    </div>
                   </CardContent>
                 </Card>
-
-                {/* Save footer */}
-                <div className="sticky bottom-0 bg-background/80 backdrop-blur-sm border-t border-border -mx-6 px-6 py-3 flex justify-end">
-                  <Button onClick={saveConfig} disabled={saving} size="sm">{saving ? "Saving..." : "Save"}</Button>
-                </div>
               </>
             )}
 
@@ -1611,7 +1716,10 @@ export default function AgentEditPage({ params }: { params: Promise<{ id: string
               <>
                 <Card size="sm">
                   <CardHeader className="border-b">
-                    <CardTitle className="text-xs">Memory Settings</CardTitle>
+                    <div className="flex items-center justify-between">
+                      <CardTitle className="text-xs">Memory Settings</CardTitle>
+                      <Badge variant="outline" className="text-[9px] border-border">live</Badge>
+                    </div>
                   </CardHeader>
                   <CardContent className="space-y-3">
                     <div className="flex flex-col gap-1.5">
@@ -1623,12 +1731,18 @@ export default function AgentEditPage({ params }: { params: Promise<{ id: string
                         className="rounded border-border bg-accent accent-teal-500" />
                       <span className="text-[10px] text-muted-foreground">Working Memory</span>
                     </label>
+                    <div className="flex justify-end pt-2">
+                      <Button onClick={saveMemorySettings} disabled={saving} size="sm">{saving ? "Saving..." : "Save Memory Settings"}</Button>
+                    </div>
                   </CardContent>
                 </Card>
 
                 <Card size="sm">
                   <CardHeader className="border-b">
-                    <CardTitle className="text-xs">Memory Template</CardTitle>
+                    <div className="flex items-center justify-between">
+                      <CardTitle className="text-xs">Memory Template</CardTitle>
+                      <span className="text-[9px] text-muted-foreground">restart required</span>
+                    </div>
                   </CardHeader>
                   <CardContent className="space-y-3">
                     <p className="text-[10px] text-muted-foreground">
@@ -1638,11 +1752,6 @@ export default function AgentEditPage({ params }: { params: Promise<{ id: string
                     <Button onClick={() => saveMarkdown("memory-template", memoryTemplate)} size="sm">Save Template</Button>
                   </CardContent>
                 </Card>
-
-                {/* Save footer */}
-                <div className="sticky bottom-0 bg-background/80 backdrop-blur-sm border-t border-border -mx-6 px-6 py-3 flex justify-end">
-                  <Button onClick={saveConfig} disabled={saving} size="sm">{saving ? "Saving..." : "Save Config"}</Button>
-                </div>
               </>
             )}
 
@@ -1821,8 +1930,9 @@ export default function AgentEditPage({ params }: { params: Promise<{ id: string
                 </Card>
 
                 {/* Save footer */}
-                <div className="sticky bottom-0 bg-background/80 backdrop-blur-sm border-t border-border -mx-6 px-6 py-3 flex justify-end">
-                  <Button onClick={saveConfig} disabled={saving} size="sm">{saving ? "Saving..." : "Save"}</Button>
+                <div className="sticky bottom-0 bg-background/80 backdrop-blur-sm border-t border-border -mx-6 px-6 py-3 flex items-center justify-between">
+                  <span className="text-xs text-muted-foreground">Tool changes take effect immediately</span>
+                  <Button onClick={saveToolsSettings} disabled={saving} size="sm">{saving ? "Saving..." : "Save"}</Button>
                 </div>
               </>
             )}
@@ -1883,7 +1993,10 @@ export default function AgentEditPage({ params }: { params: Promise<{ id: string
               <>
                 <Card size="sm">
                   <CardHeader className="border-b">
-                    <CardTitle className="text-xs">Telegram Transport</CardTitle>
+                    <div className="flex items-center justify-between">
+                      <CardTitle className="text-xs">Bot Connection</CardTitle>
+                      <span className="text-[9px] text-muted-foreground">restart required</span>
+                    </div>
                   </CardHeader>
                   <CardContent className="space-y-4">
                     <div className="space-y-1.5">
@@ -1894,6 +2007,20 @@ export default function AgentEditPage({ params }: { params: Promise<{ id: string
                       <label className={labelClass}>Owner Telegram User ID</label>
                       <input type="number" value={ownerId} onChange={e => setOwnerId(Number(e.target.value))} className={inputClass} />
                     </div>
+                    <div className="flex justify-end pt-2">
+                      <Button onClick={saveTelegramIdentity} disabled={saving} size="sm">{saving ? "Saving..." : "Save"}</Button>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card size="sm">
+                  <CardHeader className="border-b">
+                    <div className="flex items-center justify-between">
+                      <CardTitle className="text-xs">Group Access</CardTitle>
+                      <Badge variant="outline" className="text-[9px] border-border">live</Badge>
+                    </div>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
                     <div className="space-y-1.5">
                       <label className={labelClass}>Allowed Groups (comma-separated)</label>
                       <input value={allowedGroups} onChange={e => setAllowedGroups(e.target.value)} className={inputClass} placeholder="-100123456, -100789012" />
@@ -1901,6 +2028,9 @@ export default function AgentEditPage({ params }: { params: Promise<{ id: string
                     <div className="space-y-1.5">
                       <label className={labelClass}>Admin Groups (comma-separated)</label>
                       <input value={adminGroups} onChange={e => setAdminGroups(e.target.value)} className={inputClass} placeholder="-100123456" />
+                    </div>
+                    <div className="flex justify-end pt-2">
+                      <Button onClick={saveTelegramRuntime} disabled={saving} size="sm">{saving ? "Saving..." : "Save Groups"}</Button>
                     </div>
                   </CardContent>
                 </Card>
@@ -1944,11 +2074,6 @@ export default function AgentEditPage({ params }: { params: Promise<{ id: string
                   <p className="text-[10px] text-muted-foreground leading-relaxed">
                     For group chat features (auto-classification, multi-agent conversations), disable privacy mode via BotFather: <code className="font-mono text-[10px]">/setprivacy</code> → <code className="font-mono text-[10px]">Disable</code>. This allows the bot to see all group messages, not just @mentions.
                   </p>
-                </div>
-
-                {/* Save footer */}
-                <div className="sticky bottom-0 bg-background/80 backdrop-blur-sm border-t border-border -mx-6 px-6 py-3 flex justify-end">
-                  <Button onClick={saveConfig} disabled={saving} size="sm">{saving ? "Saving..." : "Save"}</Button>
                 </div>
               </>
             )}

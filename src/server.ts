@@ -2,8 +2,9 @@ import http from "node:http";
 import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
-import yaml from "yaml";
-import { config, expandEnvVars } from "./config.js";
+import { expandEnvVars } from "./config.js";
+
+const SERVER_PORT = parseInt(process.env.GOLEM_PORT || "3847", 10);
 import { logger } from "./utils/external-logger.js";
 import { getPromptTraceById, listPromptTraces } from "./agent/prompt-trace.js";
 import { allTools } from "./agent/tools/index.js";
@@ -171,7 +172,7 @@ export function startServer(deps: ServerDeps) {
   const { startedAt } = deps;
 
   const server = http.createServer(async (req, res) => {
-    const url = new URL(req.url || "/", `http://localhost:${config.serverPort}`);
+    const url = new URL(req.url || "/", `http://localhost:${SERVER_PORT}`);
     const { pathname } = url;
 
     // GET /status — health check (simple)
@@ -247,14 +248,9 @@ export function startServer(deps: ServerDeps) {
           deps.agentSettings.setGlobal("global.whisper.model", "whisper-large-v3-turbo");
         }
 
-        // 3. Write tiers to config.yaml
-        if (body.tiers) {
-          const configPath = path.resolve("config.yaml");
-          let appConfig: Record<string, unknown> = {};
-          try { appConfig = yaml.parse(fs.readFileSync(configPath, "utf-8")) || {}; } catch { /* no config yet */ }
-          if (!appConfig.llm) appConfig.llm = {};
-          (appConfig.llm as Record<string, unknown>).tiers = body.tiers;
-          fs.writeFileSync(configPath, yaml.stringify(appConfig), "utf-8");
+        // 3. Write tiers to settings.db
+        if (body.tiers && deps.agentSettings) {
+          deps.agentSettings.setGlobalJson("global.llm.tiers", body.tiers);
         }
 
         // 3. Create first agent if provided
@@ -304,7 +300,7 @@ export function startServer(deps: ServerDeps) {
           let memoryTemplate: string | null = null;
           if (body.agent.description) {
             try {
-              const personaRes = await fetch(`http://localhost:${config.serverPort}/api/platform/agents/generate-persona`, {
+              const personaRes = await fetch(`http://localhost:${SERVER_PORT}/api/platform/agents/generate-persona`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
@@ -323,15 +319,34 @@ export function startServer(deps: ServerDeps) {
             } catch { /* persona generation is best-effort */ }
           }
 
+          // Strip runtime fields from config before writing to agents.db
+          const { tools: _tools, skills: _skills, mcpServers: _mcp, allowedGroups: _ag, adminGroups: _adg, ...identityConfig } = agentConfig;
+          // Also strip runtime LLM fields from the identity config
+          identityConfig.llm = { provider: identityConfig.llm.provider } as typeof agentConfig.llm;
+
           deps.agentStore.upsert(agentId, agentConfig as import("./platform/schemas.js").AgentRegistryConfig, {
             persona,
             memoryTemplate,
             subAgents: { agents: {}, defaults: { instructions: "Complete the task and return results only." } },
           });
 
-          // Seed runtime settings from config so they're available immediately (not just after restart)
+          // Write runtime settings directly to settings.db
           if (deps.agentSettings) {
-            deps.agentSettings.seedFromConfig(agentConfig as import("./platform/schemas.js").AgentRegistryConfig);
+            deps.agentSettings.writeRuntimeDefaults(agentId, {
+              tier: agentConfig.llm.tier,
+              override: agentConfig.llm.override,
+              temperature: agentConfig.llm.temperature,
+              maxSteps: agentConfig.llm.maxSteps,
+              reasoningEffort: agentConfig.llm.reasoningEffort,
+              lastMessages: agentConfig.memory.lastMessages,
+              semanticRecall: agentConfig.memory.semanticRecall,
+              workingMemory: agentConfig.memory.workingMemory,
+              tools: agentConfig.tools,
+              skills: agentConfig.skills,
+              mcpServers: agentConfig.mcpServers,
+              allowedGroups: agentConfig.allowedGroups,
+              adminGroups: agentConfig.adminGroups,
+            });
           }
         }
 
@@ -857,9 +872,23 @@ export function startServer(deps: ServerDeps) {
           subAgents: { agents: {}, defaults: { instructions: "Complete the task and return results only." } },
         });
 
-        // Seed runtime settings so they're available immediately
+        // Write runtime settings directly to settings.db
         if (deps.agentSettings) {
-          deps.agentSettings.seedFromConfig(agentConfig as import("./platform/schemas.js").AgentRegistryConfig);
+          deps.agentSettings.writeRuntimeDefaults(id, {
+            tier: agentConfig.llm.tier,
+            override: agentConfig.llm.override,
+            temperature: agentConfig.llm.temperature,
+            maxSteps: agentConfig.llm.maxSteps,
+            reasoningEffort: agentConfig.llm.reasoningEffort,
+            lastMessages: agentConfig.memory.lastMessages,
+            semanticRecall: agentConfig.memory.semanticRecall,
+            workingMemory: agentConfig.memory.workingMemory,
+            tools: agentConfig.tools,
+            skills: agentConfig.skills,
+            mcpServers: agentConfig.mcpServers,
+            allowedGroups: agentConfig.allowedGroups,
+            adminGroups: agentConfig.adminGroups,
+          });
         }
 
         logger.info(`Agent created: ${id}`, { agent: id });
@@ -1120,6 +1149,8 @@ Example 3 — Study Tutor:
               if (!resolvedToken) warnings.push("Missing bot token");
             }
 
+            const toolCount = (deps.agentSettings?.getTools(agentId)?.length ?? 0) + (deps.agentSettings?.getMcpServers(agentId)?.length ?? 0);
+
             agents.push({
               id: agentId,
               name: cfg.name || row.id,
@@ -1127,7 +1158,7 @@ Example 3 — Study Tutor:
               enabled: cfg.enabled !== false,
               connected,
               model,
-              toolCount: (deps.agentSettings?.getTools(agentId)?.length || cfg.tools?.length || 0) + (deps.agentSettings?.getMcpServers(agentId)?.length || cfg.mcpServers?.length || 0),
+              toolCount,
               cronCount,
               warnings,
             });
@@ -1168,11 +1199,36 @@ Example 3 — Study Tutor:
         const token = String(config.transport.botToken);
         config.transport.botToken = token.startsWith("${") ? token : "****" + token.slice(-4);
       }
+
+      // Merge runtime settings from settings.db (source of truth for runtime fields)
+      if (deps.agentSettings) {
+        config.tools = deps.agentSettings.getTools(id);
+        config.skills = deps.agentSettings.getSkills(id);
+        config.mcpServers = deps.agentSettings.getMcpServers(id);
+        config.allowedGroups = deps.agentSettings.getAllowedGroups(id);
+        config.adminGroups = deps.agentSettings.getAdminGroups(id);
+        const tier = deps.agentSettings.getActiveTier(id);
+        if (tier) {
+          if (!config.llm) config.llm = {};
+          config.llm.tier = tier;
+        }
+        const maxSteps = deps.agentSettings.getMaxSteps(id);
+        if (maxSteps !== null) {
+          if (!config.llm) config.llm = {};
+          config.llm.maxSteps = maxSteps;
+        }
+        const lastMessages = deps.agentSettings.getLastMessages(id);
+        if (lastMessages !== null) {
+          if (!config.memory) config.memory = {};
+          config.memory.lastMessages = lastMessages;
+        }
+      }
+
       // Resolve the actual model being used: override > tier > fallback
       const globalTiers = deps.agentSettings?.getGlobalTiers() || {};
       const tierKey = deps.agentSettings?.getActiveTier(id) || config.llm?.tier || "low";
       const resolvedModel = config.llm?.override || globalTiers[tierKey] || config.llm?.model || "unknown";
-      // Add resolved model to response for UI display
+      if (!config.llm) config.llm = {};
       config.llm._resolvedModel = resolvedModel;
 
       return json(res, {
@@ -1189,20 +1245,44 @@ Example 3 — Study Tutor:
       if (!deps.agentStore.exists(id)) return json(res, { error: "Agent not found" }, 404);
       const body = await readBody(req);
       try {
-        const newConfig = JSON.parse(body);
-        deps.agentStore.updateConfig(id, newConfig);
+        const input = JSON.parse(body);
 
-        // Sync runtime-critical fields to settings.db so they take effect without restart
+        // Write runtime fields to settings.db (immediate effect)
         if (deps.agentSettings) {
-          const s = deps.agentSettings.getStore();
-          if (newConfig.tools) s.set(id, "tools", JSON.stringify(newConfig.tools));
-          if (newConfig.skills) s.set(id, "skills", JSON.stringify(newConfig.skills));
-          if (newConfig.mcpServers) s.set(id, "mcp_servers", JSON.stringify(newConfig.mcpServers));
-          if (newConfig.allowedGroups) s.set(id, "allowed_groups", JSON.stringify(newConfig.allowedGroups));
-          if (newConfig.adminGroups) s.set(id, "admin_groups", JSON.stringify(newConfig.adminGroups));
-          if (newConfig.llm?.tier) s.set(id, "model_tier", newConfig.llm.tier);
-          if (newConfig.llm?.maxSteps) s.set(id, "llm.maxSteps", String(newConfig.llm.maxSteps));
-          if (newConfig.memory?.lastMessages) s.set(id, "last_messages", String(newConfig.memory.lastMessages));
+          const K = await import("./platform/agent-settings.js").then(m => m.SETTINGS_KEYS);
+          const s = deps.agentSettings;
+          if (input.tools !== undefined) s.setSetting(id, K.TOOLS, input.tools);
+          if (input.skills !== undefined) s.setSetting(id, K.SKILLS, input.skills);
+          if (input.mcpServers !== undefined) s.setSetting(id, K.MCP_SERVERS, input.mcpServers);
+          if (input.allowedGroups !== undefined) s.setSetting(id, K.ALLOWED_GROUPS, input.allowedGroups);
+          if (input.adminGroups !== undefined) s.setSetting(id, K.ADMIN_GROUPS, input.adminGroups);
+          if (input.llm?.tier !== undefined) s.setSetting(id, K.MODEL_TIER, input.llm.tier);
+          if (input.llm?.maxSteps !== undefined) s.setSetting(id, K.LLM_MAX_STEPS, input.llm.maxSteps);
+          if (input.llm?.override !== undefined) s.setSetting(id, K.LLM_MODEL, input.llm.override || "");
+          if (input.llm?.temperature !== undefined) s.setSetting(id, K.LLM_TEMPERATURE, input.llm.temperature);
+          if (input.memory?.lastMessages !== undefined) s.setSetting(id, K.MEMORY_LAST_MESSAGES, input.memory.lastMessages);
+        }
+
+        // Strip runtime fields before writing identity to agents.db
+        const identityFields = { ...input };
+        delete identityFields.tools;
+        delete identityFields.skills;
+        delete identityFields.mcpServers;
+        delete identityFields.allowedGroups;
+        delete identityFields.adminGroups;
+        // Strip runtime LLM fields but keep provider
+        if (identityFields.llm) {
+          const { provider } = identityFields.llm;
+          identityFields.llm = { provider };
+        }
+        // Strip runtime memory fields
+        if (identityFields.memory) {
+          delete identityFields.memory.lastMessages;
+        }
+
+        // Only write to agents.db if there are identity fields to update
+        if (Object.keys(identityFields).length > 0) {
+          deps.agentStore.updateConfig(id, identityFields);
         }
 
         return json(res, { ok: true });
@@ -1286,7 +1366,7 @@ Example 3 — Study Tutor:
         characterName: agentConfig.characterName,
         ownerName: agentConfig.ownerName,
         role: agentConfig.role,
-        lastMessages: agentConfig.memory?.lastMessages ?? 12,
+        lastMessages: deps.agentSettings?.getLastMessages(id) ?? 12,
         behavior,
       });
       const persona = deps.agentStore?.getPersona(id) ?? "";
@@ -1483,7 +1563,7 @@ Example 3 — Study Tutor:
     return json(res, { error: "not found" }, 404);
   });
 
-  const port = deps.port ?? config.serverPort;
+  const port = deps.port ?? SERVER_PORT;
   server.listen(port, () => {
     console.log(`[server] listening on http://localhost:${port}`);
     console.log(`[server] web UI at http://localhost:3015`);
