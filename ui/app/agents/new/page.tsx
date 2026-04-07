@@ -226,7 +226,7 @@ function StepIdentity({
               <Input value={characterName} onChange={e => setCharacterName(e.target.value)} placeholder="Optional" />
             </div>
             <div className="space-y-1">
-              <Label className="text-xs text-muted-foreground">Role</Label>
+              <Label className="text-xs text-muted-foreground">Agent Role</Label>
               <Input value={role} onChange={e => setRole(e.target.value)} placeholder="personal assistant" />
             </div>
             <div className="space-y-1">

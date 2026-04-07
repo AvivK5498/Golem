@@ -73,7 +73,7 @@ Built on [Mastra](https://mastra.ai) + [Vercel AI SDK](https://ai-sdk.dev). Uses
 
 ```bash
 git clone https://github.com/AvivK5498/Golem.git
-cd golem-agent
+cd Golem
 npm install
 cp .env.example .env   # Add your OpenRouter API key
 npm start              # Starts the platform on port 3847
