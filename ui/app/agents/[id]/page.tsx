@@ -1283,7 +1283,7 @@ export default function AgentEditPage({ params }: { params: Promise<{ id: string
       });
       if (res.ok) {
         refetchSettings();
-        toast.success("Changes applied");
+        toast.success("Saved — restart to apply");
       } else toast.error("Failed to save tools");
     } finally {
       setSaving(false);
