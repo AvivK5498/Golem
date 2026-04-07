@@ -126,37 +126,91 @@ Owner: "I want a skill that generates images using AI"
 6. **Write**: Create `skills/generate-images/SKILL.md` via workspace tools.
 7. **Confirm**: "Skill 'generate-images' created. Add REPLICATE_API_TOKEN to your .env to activate it."
 
-## Async / Background Skills
+## Sync vs Async: Confirm with the Owner
 
-For skills that call external APIs with long-running jobs (video generation, CI builds, inference endpoints), use the `http-poll` handler via `schedule_job`. **Do not create new handlers or modify agent code.**
+Before drafting, determine whether the skill should be **synchronous** or **asynchronous**. Ask the owner explicitly:
 
-The SKILL.md should document the exact `schedule_job` call:
+> "This skill calls an external API. Should the agent wait for the result (sync), or dispatch it as a background job and notify you when it's done (async)?
+> - **Sync** is simpler — good for fast APIs (< 30 seconds)
+> - **Async** is better for slow tasks (video generation, CI builds, model training) — the conversation continues immediately"
+
+If the owner is unsure, recommend async for anything that typically takes more than 30 seconds.
+
+### Sync Skills
+
+The agent calls the API directly using `run_command` (curl) or `web_fetch` and returns the result inline. No special setup needed.
+
+### Async Skills (Background Jobs)
+
+For long-running tasks, the skill instructs the agent to use `schedule_job` with the `http-poll` handler. This dispatches the work to a background runner that:
+1. Submits the request to the external API
+2. Pins a progress message in the chat
+3. Polls the API for status updates (editing the pinned message)
+4. Delivers the final result to the user when complete
+
+**Do not create new job handlers or modify agent code.** The `http-poll` handler is generic and works with any async API.
+
+The SKILL.md must document the exact `schedule_job` call with all parameters filled in. The agent passes these through verbatim — it does not construct the payload itself.
+
+#### http-poll Parameters
 
 ```
 schedule_job({
   type: "http-poll",
   input: {
-    label: "human-readable name",
+    label: "human-readable task name (shown in progress messages)",
+
+    // Submit — the initial API call
     submitUrl: "https://api.example.com/run",
+    submitMethod: "POST",
     submitHeaders: { "Authorization": "Bearer ${API_KEY}" },
-    submitBody: { ... },
-    jobIdPath: "id",
+    submitBody: { prompt: "user's input here", model: "model-name" },
+    jobIdPath: "id",              // dot-path to extract job ID from response
+
+    // Poll — check status until done
     statusUrlTemplate: "https://api.example.com/status/${jobId}",
     statusHeaders: { "Authorization": "Bearer ${API_KEY}" },
-    statusPath: "status",
+    statusPath: "status",         // dot-path to status field
     completedStatuses: ["COMPLETED"],
     failedStatuses: ["FAILED", "ERROR"],
-    resultPath: "output.url",
-    errorPath: "error",
-    pollIntervalMs: 10000,
-    maxPollMs: 600000
-  }
+    resultPath: "output.url",     // dot-path to the result on completion
+    errorPath: "error",           // dot-path to error message on failure
+
+    // Timing
+    pollIntervalMs: 10000,        // poll every 10s (default)
+    maxPollMs: 600000             // give up after 10min (default)
+  },
+  timeoutMs: 1200000              // job-level timeout (20min for video gen)
 })
 ```
 
-The handler automatically: submits, polls, pins a progress message, edits it with status updates, and delivers the result.
+#### Async Skill Example
 
-If the user provides an API key, store it with `store_secret` before creating the skill. Reference it in headers as `${ENV_VAR_NAME}` — the agent resolves it from `process.env` at call time.
+Owner: "I want a skill that generates videos using RunPod"
+
+SKILL.md would include instructions like:
+
+```markdown
+When the user asks to generate a video:
+1. Confirm the prompt and any style preferences
+2. Call schedule_job with:
+   - type: "http-poll"
+   - submitUrl: "https://api.runpod.ai/v2/${RUNPOD_ENDPOINT_ID}/run"
+   - submitHeaders: { "Authorization": "Bearer ${RUNPOD_API_KEY}" }
+   - submitBody: { input: { prompt: "<user's prompt>" } }
+   - jobIdPath: "id"
+   - statusUrlTemplate: "https://api.runpod.ai/v2/${RUNPOD_ENDPOINT_ID}/status/${jobId}"
+   - statusHeaders: { "Authorization": "Bearer ${RUNPOD_API_KEY}" }
+   - statusPath: "status"
+   - completedStatuses: ["COMPLETED"]
+   - failedStatuses: ["FAILED", "CANCELLED"]
+   - resultPath: "output.video_url"
+3. Tell the user the job is running — they'll get the result automatically
+```
+
+#### API Key Handling
+
+If the skill needs an API key, store it with `store_secret` before creating the skill. Reference it in headers as `${ENV_VAR_NAME}` — the handler resolves environment variables at runtime.
 
 ### Extended Skill Format (Optional)
 
