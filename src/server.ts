@@ -20,11 +20,23 @@ function json(res: http.ServerResponse, data: unknown, status = 200) {
   res.end(JSON.stringify(data));
 }
 
+const MAX_BODY_SIZE = 1_048_576; // 1MB
+
 function readBody(req: http.IncomingMessage): Promise<string> {
-  return new Promise((resolve) => {
+  return new Promise((resolve, reject) => {
     let body = "";
-    req.on("data", (chunk) => { body += chunk; });
+    let size = 0;
+    req.on("data", (chunk: Buffer | string) => {
+      size += typeof chunk === "string" ? chunk.length : chunk.byteLength;
+      if (size > MAX_BODY_SIZE) {
+        req.destroy();
+        reject(new Error("Request body too large"));
+        return;
+      }
+      body += chunk;
+    });
     req.on("end", () => resolve(body));
+    req.on("error", reject);
   });
 }
 

@@ -87,9 +87,14 @@ export interface PlatformContext {
 // and injects the output before passing to the agent.
 
 import { execSync } from "node:child_process";
+import { isCommandAllowed } from "../agent/tools/run-command-tool.js";
 
 function preprocessCommands(text: string): string {
   return text.replace(/!`([^`]+)`/g, (_match, cmd: string) => {
+    const check = isCommandAllowed(cmd);
+    if (!check.allowed) {
+      return `[command blocked: binary "${check.blocked}" is not in the allowed list]`;
+    }
     try {
       return execSync(cmd, { timeout: 15_000, encoding: "utf-8", stdio: ["pipe", "pipe", "pipe"] }).trim();
     } catch (err) {

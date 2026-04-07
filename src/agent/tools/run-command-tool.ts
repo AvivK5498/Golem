@@ -26,6 +26,20 @@ export function setAllowedBinaries(binaries: string[]): void {
   (runCommandTool as any).description = getRunCommandDescription();
 }
 
+/** Check if a command's binaries are all allowed (used by preprocessCommands) */
+export function isCommandAllowed(command: string): { allowed: boolean; blocked?: string } {
+  const stripped = command.replace(/"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'/g, '""');
+  const segments = stripped.split(/[|;&]+/).map(s => s.trim()).filter(Boolean);
+  for (const segment of segments) {
+    const firstToken = segment.split(/\s+/)[0] || "";
+    const bin = firstToken.split("/").pop() || firstToken;
+    if (bin && !ALWAYS_ALLOWED.has(bin) && !userAllowedBinaries.has(bin)) {
+      return { allowed: false, blocked: bin };
+    }
+  }
+  return { allowed: true };
+}
+
 /** Get the current allowed binaries list (for tool description) */
 export function getAllowedBinariesList(): string[] {
   return [...userAllowedBinaries];
