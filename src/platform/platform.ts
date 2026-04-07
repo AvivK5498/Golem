@@ -543,6 +543,9 @@ function registerAgentTransport(
   const recentMessageIds = new Map<string, number>();
 
   transport.onMessage(async (msg: IncomingMessage) => {
+    // Ignore the bot's own outgoing messages (pinned progress updates, status edits, etc.)
+    if (msg.fromMe) return;
+
     // ── 1. Message deduplication ──────────────────────────────
     const dedupeKey = msg.id ? `${msg.from.platform}:${msg.from.id}:${msg.id}` : "";
     if (dedupeKey) {

@@ -121,7 +121,12 @@ export const codingRunnerHandler: JobHandler = {
       const duration = formatElapsed(result.durationMs);
       const status = result.success ? "✅ Coding agent finished" : "❌ Coding agent failed";
 
-      const finalMessage = `${header}\n${status} (${duration})`;
+      // Include the coding agent's structured output summary, stripping tool activity logs
+      let cleanOutput = result.output;
+      const toolLogIdx = cleanOutput.indexOf("\n--- Tool Activity");
+      if (toolLogIdx !== -1) cleanOutput = cleanOutput.slice(0, toolLogIdx).trimEnd();
+      if (cleanOutput.length > 1500) cleanOutput = cleanOutput.slice(0, 1500) + "...[truncated]";
+      const finalMessage = `${status} (${duration})\n\n${cleanOutput}`;
 
       if (canEdit && pinnedMessageId) {
         await ctx.editMessage!(ctx.targetAddress, pinnedMessageId, finalMessage).catch(() => {});

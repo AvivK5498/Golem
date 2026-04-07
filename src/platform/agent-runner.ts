@@ -320,6 +320,16 @@ export class AgentRunner {
 
       const asyncJobDispatched = requestContext.get("_asyncJobDispatched" as never);
 
+      // AsyncJobGuard aborts the loop after async job dispatch (step 1 TripWire).
+      // The result text is empty because no LLM ran after step 0. Extract the
+      // confirmation from the tool result in step 0 (the code_agent return value).
+      if (asyncJobDispatched && !result.text?.trim()) {
+        const step0Text = steps?.[0]?.text?.trim();
+        if (step0Text) {
+          result = { ...result, text: step0Text };
+        }
+      }
+
       // Hard-stop fallback: if many steps ran but result text is empty, the model
       // hit a limit (error gate, per-turn cap) without producing a final answer.
       // Ensure the user always gets something back.

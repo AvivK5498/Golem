@@ -75,8 +75,16 @@ export const codeAgentTool = createTool({
       const eventSource = context?.requestContext?.get("eventSource" as never) as unknown as string | undefined;
       const slackThreadId = context?.requestContext?.get("slackThreadId" as never) as unknown as string | undefined;
 
-      // Dedup: only one coding job per user turn (across all sub-agent calls).
-      // Set the flag BEFORE enqueue to block parallel calls in the same step.
+      // Dedup: block if a coding job is already queued or running (cross-turn, persisted in SQLite).
+      const hasActive = jobQueue.hasActiveJob("coding", (existing: unknown) => {
+        const e = existing as { task?: string };
+        return !!e.task; // any active coding job blocks new ones
+      });
+      if (hasActive) {
+        return "A coding task is already running. Wait for it to complete before dispatching another.";
+      }
+
+      // Per-turn dedup: block parallel tool calls within the same step.
       const rc = context?.requestContext;
       if (rc) {
         const alreadyDispatched = rc.get("_asyncJobDispatched" as never) as unknown as boolean | undefined;
