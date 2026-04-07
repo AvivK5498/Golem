@@ -130,15 +130,21 @@ export const storeSecretTool = createTool({
 export const scheduleJobTool = createTool({
   id: "schedule_job",
   description:
-    "Enqueue a background job for asynchronous processing. The job runs outside the current turn and " +
-    "results are sent to the user when complete. " +
-    `Available job types: ${JOB_HANDLER_TYPES.join(", ")}. ` +
-    "Use for long-running tasks that would exceed turn timeout.",
+    "Run a long-running task in the background (video generation, image processing, HTTP polling, etc). " +
+    "The conversation continues immediately — the user gets a notification when the task completes. " +
+    "Use this when a skill instructs you to dispatch a background job. " +
+    "The skill will provide the exact type and input parameters to pass through.",
   inputSchema: z.object({
-    type: z.enum(JOB_HANDLER_TYPES as [string, ...string[]]).describe("Job handler type"),
-    input: z.record(z.string(), z.unknown()).describe("Job input parameters"),
-    timeoutMs: z.number().optional().default(600_000).describe("Job timeout in milliseconds (default 10 minutes)"),
-    maxAttempts: z.number().optional().default(2).describe("Max retry attempts on failure"),
+    type: z.enum(JOB_HANDLER_TYPES as [string, ...string[]]).describe(
+      `The job handler to use. Available: ${JOB_HANDLER_TYPES.join(", ")}. ` +
+      "Use 'http-poll' for API calls that need polling (video/image generation). " +
+      "Use 'coding' only if code_agent is unavailable."
+    ),
+    input: z.record(z.string(), z.unknown()).describe(
+      "Job parameters as specified by the skill. Pass through exactly what the skill instructions say — do not modify or guess the structure."
+    ),
+    timeoutMs: z.number().optional().default(600_000).describe("Timeout in ms (default: 10 min, max: 20 min for video generation)"),
+    maxAttempts: z.number().optional().default(2).describe("Retry attempts on failure (default: 2)"),
   }),
   execute: async (input, context) => {
     const jobQueue = context?.requestContext?.get("jobQueue" as never) as unknown as JobQueue | undefined;
