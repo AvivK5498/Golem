@@ -316,6 +316,11 @@ export function startServer(deps: ServerDeps) {
             memoryTemplate,
             subAgents: { agents: {}, defaults: { instructions: "Complete the task and return results only." } },
           });
+
+          // Seed runtime settings from config so they're available immediately (not just after restart)
+          if (deps.agentSettings) {
+            deps.agentSettings.seedFromConfig(agentConfig as import("./platform/schemas.js").AgentRegistryConfig);
+          }
         }
 
         return json(res, { ok: true, message: "Setup complete. Restart the platform to apply changes." }, 201);
@@ -839,6 +844,11 @@ export function startServer(deps: ServerDeps) {
           memoryTemplate: input.memoryTemplate || null,
           subAgents: { agents: {}, defaults: { instructions: "Complete the task and return results only." } },
         });
+
+        // Seed runtime settings so they're available immediately
+        if (deps.agentSettings) {
+          deps.agentSettings.seedFromConfig(agentConfig as import("./platform/schemas.js").AgentRegistryConfig);
+        }
 
         logger.info(`Agent created: ${id}`, { agent: id });
         return json(res, { ok: true, id }, 201);

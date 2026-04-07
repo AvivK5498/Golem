@@ -8,7 +8,7 @@ import { generateText } from "ai";
 import { getModelForId } from "../agent/model.js";
 import { logger } from "../utils/external-logger.js";
 
-const CLASSIFIER_MODEL = "google/gemini-3.1-flash-lite-preview";
+const DEFAULT_CLASSIFIER_MODEL = "google/gemini-3.1-flash-lite-preview";
 
 export interface GroupAgent {
   id: string;
@@ -24,6 +24,7 @@ export async function shouldAgentRespond(
   agent: GroupAgent,
   otherAgents: GroupAgent[],
   message: string,
+  nanoModel?: string | null,
 ): Promise<boolean> {
   // Pre-filter: skip very short messages, likely reactions or acknowledgements
   if (message.trim().length < 5) return false;
@@ -37,7 +38,7 @@ export async function shouldAgentRespond(
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 5000);
     const { text } = await generateText({
-      model: getModelForId(CLASSIFIER_MODEL),
+      model: getModelForId(nanoModel || DEFAULT_CLASSIFIER_MODEL),
       temperature: 0,
       maxOutputTokens: 128,
       abortSignal: controller.signal,

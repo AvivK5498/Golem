@@ -633,7 +633,7 @@ function registerAgentTransport(
           .map(c => ({ id: c.id, name: c.characterName || c.name, description: c.description }));
         const thisAgent = { id: config.id, name: config.characterName || config.name, description: config.description };
 
-        const shouldRespond = await shouldAgentRespond(thisAgent, otherAgents, msg.text || "");
+        const shouldRespond = await shouldAgentRespond(thisAgent, otherAgents, msg.text || "", deps.agentSettings.getGlobalNanoModel());
         if (!shouldRespond) return;
       }
     }
