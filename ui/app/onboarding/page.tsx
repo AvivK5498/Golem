@@ -46,9 +46,6 @@ const TIER_DESCRIPTIONS = {
 function StepWelcome({ onNext }: { onNext: () => void }) {
   return (
     <div className="flex flex-col items-center justify-center min-h-[400px] text-center space-y-6">
-      <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-[var(--brand)] text-[var(--primary-foreground)] text-2xl font-bold shadow-md">
-        G
-      </div>
       <div className="space-y-2">
         <h1 className="text-[28px] font-semibold tracking-tight">Welcome to {APP_NAME}</h1>
         <p className="text-sm text-muted-foreground max-w-md">
