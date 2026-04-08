@@ -17,7 +17,6 @@ import {
   ArrowLeft,
   Bot,
   Key,
-  Layers,
   MessageSquare,
   Plug,
   Sparkles,
@@ -27,7 +26,7 @@ import {
 } from "lucide-react";
 import type { OpenRouterModel } from "@/lib/types";
 
-const TOTAL_STEPS = 6;
+const TOTAL_STEPS = 7;
 
 const DEFAULT_TIERS = {
   low: "google/gemini-3-flash-preview",
@@ -401,15 +400,8 @@ function StepAgent({
   setAgentTier,
   ownerName,
   setOwnerName,
-  selectedTools,
-  setSelectedTools,
-  selectedSkills,
-  setSelectedSkills,
-  selectedMcp,
-  setSelectedMcp,
-  onSubmit,
+  onNext,
   onBack,
-  submitting,
 }: {
   agentName: string;
   setAgentName: (v: string) => void;
@@ -419,33 +411,10 @@ function StepAgent({
   setAgentTier: (v: string) => void;
   ownerName: string;
   setOwnerName: (v: string) => void;
-  selectedTools: string[];
-  setSelectedTools: (v: string[]) => void;
-  selectedSkills: string[];
-  setSelectedSkills: (v: string[]) => void;
-  selectedMcp: string[];
-  setSelectedMcp: (v: string[]) => void;
-  onSubmit: () => void;
+  onNext: () => void;
   onBack: () => void;
-  submitting: boolean;
 }) {
-  const [showCapabilities, setShowCapabilities] = useState(false);
-  const { data: skillsData } = useFetch<{ skills: { name: string; description: string; eligible: boolean }[] }>("/api/available-skills");
-  const { data: mcpData } = useFetch<{ servers: string[] }>("/api/platform/mcp-servers");
-
-  const eligibleSkills = (skillsData?.skills || []).filter((s) => s.eligible);
-  const mcpServers = mcpData?.servers || [];
   const isValid = agentName.trim().length > 0 && agentDescription.trim().length > 0;
-
-  function toggleTool(id: string) {
-    setSelectedTools(selectedTools.includes(id) ? selectedTools.filter((t) => t !== id) : [...selectedTools, id]);
-  }
-  function toggleSkill(name: string) {
-    setSelectedSkills(selectedSkills.includes(name) ? selectedSkills.filter((s) => s !== name) : [...selectedSkills, name]);
-  }
-  function toggleMcp(name: string) {
-    setSelectedMcp(selectedMcp.includes(name) ? selectedMcp.filter((m) => m !== name) : [...selectedMcp, name]);
-  }
 
   return (
     <div className="space-y-6">
@@ -518,96 +487,120 @@ function StepAgent({
         </CardContent>
       </Card>
 
-      {/* Capabilities (collapsible) */}
-      <div>
-        <button
-          onClick={() => setShowCapabilities(!showCapabilities)}
-          className="flex items-center gap-2 text-[13px] font-medium text-muted-foreground hover:text-foreground transition-colors"
-        >
-          <Layers size={14} />
-          {showCapabilities ? "Hide capabilities" : "Configure capabilities (optional)"}
-          <span className="text-xs text-muted-foreground/60">
-            {selectedTools.length} tools · {selectedSkills.length} skills · {selectedMcp.length} MCP
-          </span>
-        </button>
+      <div className="flex items-center justify-between pt-4">
+        <Button variant="outline" onClick={onBack} className="gap-1">
+          <ArrowLeft size={14} /> Back
+        </Button>
+        <Button onClick={onNext} disabled={!isValid} className="gap-1">
+          Next <ArrowRight size={14} />
+        </Button>
+      </div>
+    </div>
+  );
+}
 
-        {showCapabilities && (
-          <div className="mt-3 space-y-4">
-            {/* Built-in tools */}
-            <Card>
-              <CardContent className="p-4">
-                <p className="text-[13px] font-medium mb-2 flex items-center gap-2">
-                  <Wrench size={13} /> Built-in Tools
-                </p>
-                <div className="grid grid-cols-2 gap-x-4">
-                  {BUILTIN_TOOLS.map((tool) => (
-                    <CheckboxItem
-                      key={tool.id}
-                      checked={selectedTools.includes(tool.id)}
-                      onChange={() => toggleTool(tool.id)}
-                      label={tool.label}
-                      description={tool.description}
-                      detail={tool.detail}
-                      security={tool.security}
-                    />
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
+function StepCapabilities({
+  selectedTools,
+  setSelectedTools,
+  selectedSkills,
+  setSelectedSkills,
+  onSubmit,
+  onBack,
+  submitting,
+}: {
+  selectedTools: string[];
+  setSelectedTools: (v: string[]) => void;
+  selectedSkills: string[];
+  setSelectedSkills: (v: string[]) => void;
+  onSubmit: () => void;
+  onBack: () => void;
+  submitting: boolean;
+}) {
+  const { data: skillsData } = useFetch<{ skills: { name: string; description: string; eligible: boolean }[] }>("/api/available-skills");
+  const eligibleSkills = (skillsData?.skills || []).filter((s) => s.eligible);
 
-            {/* Skills */}
-            {eligibleSkills.length > 0 && (
-              <Card>
-                <CardContent className="p-4">
-                  <p className="text-[13px] font-medium mb-2 flex items-center gap-2">
-                    <Sparkles size={13} /> Skills
-                    <span className="text-xs text-muted-foreground font-normal">({eligibleSkills.length} available)</span>
-                  </p>
-                  <div className="grid grid-cols-2 gap-x-4">
-                    {eligibleSkills.map((skill) => (
-                      <CheckboxItem
-                        key={skill.name}
-                        checked={selectedSkills.includes(skill.name)}
-                        onChange={() => toggleSkill(skill.name)}
-                        label={skill.name}
-                        description={skill.description}
-                      />
-                    ))}
-                  </div>
-                </CardContent>
-              </Card>
-            )}
+  function toggleTool(id: string) {
+    setSelectedTools(selectedTools.includes(id) ? selectedTools.filter((t) => t !== id) : [...selectedTools, id]);
+  }
+  function toggleSkill(name: string) {
+    setSelectedSkills(selectedSkills.includes(name) ? selectedSkills.filter((s) => s !== name) : [...selectedSkills, name]);
+  }
 
-            {/* MCP Servers */}
-            {mcpServers.length > 0 && (
-              <Card>
-                <CardContent className="p-4">
-                  <p className="text-[13px] font-medium mb-2 flex items-center gap-2">
-                    <Plug size={13} /> MCP Servers
-                    <span className="text-xs text-muted-foreground font-normal">({mcpServers.length} configured)</span>
-                  </p>
-                  <div className="grid grid-cols-2 gap-x-4">
-                    {mcpServers.map((server) => (
-                      <CheckboxItem
-                        key={server}
-                        checked={selectedMcp.includes(server)}
-                        onChange={() => toggleMcp(server)}
-                        label={server}
-                      />
-                    ))}
-                  </div>
-                </CardContent>
-              </Card>
-            )}
+  return (
+    <div className="space-y-6">
+      <div className="space-y-2">
+        <h2 className="text-xl font-semibold">What can your agent do?</h2>
+        <p className="text-sm text-muted-foreground">
+          Choose what your agent is allowed to do. You can change these later in Settings.
+        </p>
+      </div>
+
+      {/* Tools */}
+      <Card>
+        <CardContent className="p-4">
+          <p className="text-[13px] font-medium mb-3 flex items-center gap-2">
+            <Wrench size={13} /> Tools
+            <span className="text-xs text-muted-foreground font-normal">
+              ({selectedTools.length} of {BUILTIN_TOOLS.length} selected)
+            </span>
+          </p>
+          <div className="space-y-1">
+            {BUILTIN_TOOLS.map((tool) => (
+              <CheckboxItem
+                key={tool.id}
+                checked={selectedTools.includes(tool.id)}
+                onChange={() => toggleTool(tool.id)}
+                label={tool.label}
+                description={tool.description}
+                detail={tool.detail}
+                security={tool.security}
+              />
+            ))}
           </div>
-        )}
+        </CardContent>
+      </Card>
+
+      {/* Skills */}
+      {eligibleSkills.length > 0 && (
+        <Card>
+          <CardContent className="p-4">
+            <p className="text-[13px] font-medium mb-3 flex items-center gap-2">
+              <Sparkles size={13} /> Skills
+              <span className="text-xs text-muted-foreground font-normal">
+                ({eligibleSkills.length} available)
+              </span>
+            </p>
+            <div className="space-y-1">
+              {eligibleSkills.map((skill) => (
+                <CheckboxItem
+                  key={skill.name}
+                  checked={selectedSkills.includes(skill.name)}
+                  onChange={() => toggleSkill(skill.name)}
+                  label={skill.name}
+                  description={skill.description}
+                />
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* MCP awareness footer */}
+      <div className="rounded-md border border-border/60 bg-muted/40 p-3 text-xs text-muted-foreground flex gap-2">
+        <Plug size={13} className="mt-0.5 shrink-0" />
+        <p>
+          Need web search, GitHub, databases, or other integrations? Those come from{" "}
+          <span className="text-foreground font-medium">MCP servers</span>. For now, add them
+          manually by editing <span className="font-mono text-foreground">mcp-servers.yaml</span>.
+          A UI for managing MCP servers will come in a future release.
+        </p>
       </div>
 
       <div className="flex items-center justify-between pt-4">
         <Button variant="outline" onClick={onBack} className="gap-1">
           <ArrowLeft size={14} /> Back
         </Button>
-        <Button onClick={onSubmit} disabled={!isValid || submitting} className="gap-1">
+        <Button onClick={onSubmit} disabled={submitting} className="gap-1">
           {submitting ? (
             <TextShimmer className="text-sm" duration={1.5}>
               Creating agent...
@@ -691,7 +684,7 @@ function StepDone({ agentName }: { agentName: string }) {
 
 function StepIndicator({ current, total }: { current: number; total: number }) {
   if (current === 0) return null; // no indicator on welcome
-  const labels = ["LLM Key", "Tiers", "Telegram", "Voice", "Agent", "Done"];
+  const labels = ["LLM Key", "Tiers", "Telegram", "Voice", "Agent", "Capabilities", "Done"];
   return (
     <div className="space-y-3">
       <Progress value={(current / total) * 100} className="h-1" />
@@ -741,7 +734,6 @@ export default function OnboardingPage() {
     BUILTIN_TOOLS.filter((t) => t.default).map((t) => t.id)
   );
   const [selectedSkills, setSelectedSkills] = useState<string[]>([]);
-  const [selectedMcp, setSelectedMcp] = useState<string[]>([]);
 
   // Step 5: Done
   const [submitting, setSubmitting] = useState(false);
@@ -768,7 +760,7 @@ export default function OnboardingPage() {
             tier: agentTier,
             tools: selectedTools,
             skills: selectedSkills,
-            mcpServers: selectedMcp,
+            mcpServers: [],
           },
         }),
       });
@@ -781,7 +773,7 @@ export default function OnboardingPage() {
       }
 
       setSetupComplete(true);
-      setStep(6);
+      setStep(7);
     } catch (err) {
       toast.error("Setup failed — check your connection");
       setSubmitting(false);
@@ -798,8 +790,9 @@ export default function OnboardingPage() {
         {step === 2 && <StepTiers tiers={tiers} setTiers={setTiers} onNext={() => setStep(3)} onBack={() => setStep(1)} />}
         {step === 3 && <StepTelegram botToken={botToken} setBotToken={setBotToken} ownerId={ownerId} setOwnerId={setOwnerId} onNext={() => setStep(4)} onBack={() => setStep(2)} />}
         {step === 4 && <StepVoice groqApiKey={groqApiKey} setGroqApiKey={setGroqApiKey} onNext={() => setStep(5)} onBack={() => setStep(3)} />}
-        {step === 5 && <StepAgent agentName={agentName} setAgentName={setAgentName} agentDescription={agentDescription} setAgentDescription={setAgentDescription} agentTier={agentTier} setAgentTier={setAgentTier} ownerName={ownerName} setOwnerName={setOwnerName} selectedTools={selectedTools} setSelectedTools={setSelectedTools} selectedSkills={selectedSkills} setSelectedSkills={setSelectedSkills} selectedMcp={selectedMcp} setSelectedMcp={setSelectedMcp} onSubmit={handleCreateAgent} onBack={() => setStep(4)} submitting={submitting} />}
-        {step === 6 && <StepDone agentName={agentName} />}
+        {step === 5 && <StepAgent agentName={agentName} setAgentName={setAgentName} agentDescription={agentDescription} setAgentDescription={setAgentDescription} agentTier={agentTier} setAgentTier={setAgentTier} ownerName={ownerName} setOwnerName={setOwnerName} onNext={() => setStep(6)} onBack={() => setStep(4)} />}
+        {step === 6 && <StepCapabilities selectedTools={selectedTools} setSelectedTools={setSelectedTools} selectedSkills={selectedSkills} setSelectedSkills={setSelectedSkills} onSubmit={handleCreateAgent} onBack={() => setStep(5)} submitting={submitting} />}
+        {step === 7 && <StepDone agentName={agentName} />}
       </div>
     </div>
   );

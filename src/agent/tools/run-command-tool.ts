@@ -11,8 +11,8 @@ import { toolError, toolGuidance, TOOL_ERROR_COUNT_KEY } from "./error-tagging.j
 
 /** Read-only binaries always allowed — safe, no side effects */
 const ALWAYS_ALLOWED = new Set([
-  "grep", "find", "cat", "ls", "wc", "sort",
-  "head", "tail", "echo", "date", "pwd", "which", "env",
+  "grep", "cat", "ls", "wc", "sort",
+  "head", "tail", "echo", "date", "pwd", "which",
 ]);
 
 /** User-configured allowed binaries — loaded from SQLite at startup */
@@ -111,15 +111,15 @@ export function getRunCommandDescription(): string {
   const binList = allowed.length > 0 ? allowed.join(", ") : "(none configured — add binaries in Settings → Command Security)";
   return "Run a CLI binary on the host machine. " +
     `Allowed binaries: ${binList}. ` +
-    "Read-only tools (grep, find, cat, ls, wc, sort, head, tail) are always available. " +
+    "Read-only tools (grep, cat, ls, wc, sort, head, tail) are always available. " +
     `File access restricted to: ${ALLOWED_PATHS.map(p => p.replace(os.homedir(), "~")).join(", ")}. ` +
-    "Destructive commands (git push, npm install) require owner approval. " +
+    "Sensitive paths (.ssh, .env, .aws, credentials, etc.) are blocked. " +
     `Output truncated at ${MAX_RUN_COMMAND_OUTPUT_CHARS} chars. Max ${MAX_RUN_COMMAND_PER_TURN} calls per turn.`;
 }
 
 export const runCommandTool = createTool({
   id: "run_command",
-  description: "Run a CLI binary on the host machine. Read-only tools (grep, find, cat, ls, wc, sort, head, tail) are always available.",
+  description: "Run a CLI binary on the host machine. Read-only tools (grep, cat, ls, wc, sort, head, tail) are always available.",
   inputSchema: z.object({
     command: z.string().describe("The shell command to execute."),
     timeout: z.number().optional().default(30000),

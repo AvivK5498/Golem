@@ -18,7 +18,6 @@ import {
   Bot,
   MessageSquare,
   Sparkles,
-  Layers,
   Wrench,
   Plug,
   PenLine,
@@ -111,7 +110,6 @@ function StepIdentity({
   model, setModel, reasoningEffort, setReasoningEffort,
   maxSteps, setMaxSteps, temperature, setTemperature,
   selectedTools, setSelectedTools, selectedSkills, setSelectedSkills,
-  selectedMcp, setSelectedMcp,
   onNext, sanitizedName,
 }: {
   name: string; setName: (v: string) => void;
@@ -125,14 +123,12 @@ function StepIdentity({
   temperature: number; setTemperature: (v: number) => void;
   selectedTools: string[]; setSelectedTools: (v: string[]) => void;
   selectedSkills: string[]; setSelectedSkills: (v: string[]) => void;
-  selectedMcp: string[]; setSelectedMcp: (v: string[]) => void;
   onNext: () => void;
   sanitizedName: string;
 }) {
   const { data: modelsData } = useFetch<{ models: OpenRouterModel[] }>("/api/models");
   const { data: globalSettings } = useFetch<Record<string, string>>("/api/settings");
   const { data: skillsData } = useFetch<{ skills: { name: string; description: string; eligible: boolean }[] }>("/api/available-skills");
-  const { data: mcpData } = useFetch<{ servers: string[] }>("/api/platform/mcp-servers");
   const models = modelsData?.models;
 
   const tiers: Record<string, string> = (() => {
@@ -141,15 +137,12 @@ function StepIdentity({
   const hasTiers = Object.keys(tiers).length > 0;
 
   const eligibleSkills = (skillsData?.skills || []).filter(s => s.eligible);
-  const mcpServers = mcpData?.servers || [];
 
   const [showAdvanced, setShowAdvanced] = useState(false);
-  const [showCapabilities, setShowCapabilities] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   function toggleTool(id: string) { setSelectedTools(selectedTools.includes(id) ? selectedTools.filter(t => t !== id) : [...selectedTools, id]); }
   function toggleSkill(n: string) { setSelectedSkills(selectedSkills.includes(n) ? selectedSkills.filter(s => s !== n) : [...selectedSkills, n]); }
-  function toggleMcp(n: string) { setSelectedMcp(selectedMcp.includes(n) ? selectedMcp.filter(m => m !== n) : [...selectedMcp, n]); }
 
   function handleNext() {
     if (!sanitizedName) { setError("Name is required"); return; }
@@ -274,60 +267,57 @@ function StepIdentity({
         )}
       </div>
 
-      {/* Capabilities (collapsible) */}
-      <div>
-        <button
-          onClick={() => setShowCapabilities(!showCapabilities)}
-          className="flex items-center gap-2 text-[13px] font-medium text-muted-foreground hover:text-foreground transition-colors"
-        >
-          <Layers size={14} />
-          {showCapabilities ? "Hide capabilities" : "Configure capabilities (optional)"}
-          <span className="text-xs text-muted-foreground/60">
-            {selectedTools.length} tools · {selectedSkills.length} skills · {selectedMcp.length} MCP
-          </span>
-        </button>
-        {showCapabilities && (
-          <div className="mt-3 space-y-4">
-            <Card>
-              <CardContent className="p-4">
-                <p className="text-[13px] font-medium mb-2 flex items-center gap-2"><Wrench size={13} /> Built-in Tools</p>
-                <div className="grid grid-cols-2 gap-x-4">
-                  {BUILTIN_TOOLS.map(tool => (
-                    <CheckboxItem key={tool.id} checked={selectedTools.includes(tool.id)} onChange={() => toggleTool(tool.id)} label={tool.label} description={tool.description} detail={tool.detail} security={tool.security} />
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-            {eligibleSkills.length > 0 && (
-              <Card>
-                <CardContent className="p-4">
-                  <p className="text-[13px] font-medium mb-2 flex items-center gap-2">
-                    <Sparkles size={13} /> Skills <span className="text-xs text-muted-foreground font-normal">({eligibleSkills.length} available)</span>
-                  </p>
-                  <div className="grid grid-cols-2 gap-x-4">
-                    {eligibleSkills.map(skill => (
-                      <CheckboxItem key={skill.name} checked={selectedSkills.includes(skill.name)} onChange={() => toggleSkill(skill.name)} label={skill.name} description={skill.description} />
-                    ))}
-                  </div>
-                </CardContent>
-              </Card>
-            )}
-            {mcpServers.length > 0 && (
-              <Card>
-                <CardContent className="p-4">
-                  <p className="text-[13px] font-medium mb-2 flex items-center gap-2">
-                    <Plug size={13} /> MCP Servers <span className="text-xs text-muted-foreground font-normal">({mcpServers.length} configured)</span>
-                  </p>
-                  <div className="grid grid-cols-2 gap-x-4">
-                    {mcpServers.map(server => (
-                      <CheckboxItem key={server} checked={selectedMcp.includes(server)} onChange={() => toggleMcp(server)} label={server} />
-                    ))}
-                  </div>
-                </CardContent>
-              </Card>
-            )}
-          </div>
+      {/* What can your agent do? */}
+      <div className="space-y-4">
+        <div className="space-y-1">
+          <h3 className="text-[15px] font-semibold">What can your agent do?</h3>
+          <p className="text-xs text-muted-foreground">
+            Choose what your agent is allowed to do. You can change these later in Settings.
+          </p>
+        </div>
+
+        <Card>
+          <CardContent className="p-4">
+            <p className="text-[13px] font-medium mb-3 flex items-center gap-2">
+              <Wrench size={13} /> Tools
+              <span className="text-xs text-muted-foreground font-normal">
+                ({selectedTools.length} of {BUILTIN_TOOLS.length} selected)
+              </span>
+            </p>
+            <div className="space-y-1">
+              {BUILTIN_TOOLS.map(tool => (
+                <CheckboxItem key={tool.id} checked={selectedTools.includes(tool.id)} onChange={() => toggleTool(tool.id)} label={tool.label} description={tool.description} detail={tool.detail} security={tool.security} />
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+
+        {eligibleSkills.length > 0 && (
+          <Card>
+            <CardContent className="p-4">
+              <p className="text-[13px] font-medium mb-3 flex items-center gap-2">
+                <Sparkles size={13} /> Skills
+                <span className="text-xs text-muted-foreground font-normal">({eligibleSkills.length} available)</span>
+              </p>
+              <div className="space-y-1">
+                {eligibleSkills.map(skill => (
+                  <CheckboxItem key={skill.name} checked={selectedSkills.includes(skill.name)} onChange={() => toggleSkill(skill.name)} label={skill.name} description={skill.description} />
+                ))}
+              </div>
+            </CardContent>
+          </Card>
         )}
+
+        {/* MCP awareness footer */}
+        <div className="rounded-md border border-border/60 bg-muted/40 p-3 text-xs text-muted-foreground flex gap-2">
+          <Plug size={13} className="mt-0.5 shrink-0" />
+          <p>
+            Need web search, GitHub, databases, or other integrations? Those come from{" "}
+            <span className="text-foreground font-medium">MCP servers</span>. For now, add them
+            manually by editing <span className="font-mono text-foreground">mcp-servers.yaml</span>.
+            A UI for managing MCP servers will come in a future release.
+          </p>
+        </div>
       </div>
 
       {error && <p className="text-xs text-destructive">{error}</p>}
@@ -835,7 +825,6 @@ export default function NewAgentWizard() {
     BUILTIN_TOOLS.filter(t => t.default).map(t => t.id),
   );
   const [selectedSkills, setSelectedSkills] = useState<string[]>([]);
-  const [selectedMcp, setSelectedMcp] = useState<string[]>([]);
 
   // Style
   const [responseLength, setResponseLength] = useState("balanced");
@@ -880,7 +869,7 @@ export default function NewAgentWizard() {
     ownerId: ownerId ? parseInt(ownerId, 10) : 0,
     tools: selectedTools,
     skills: selectedSkills,
-    mcpServers: selectedMcp,
+    mcpServers: [],
   };
 
   return (
@@ -901,7 +890,6 @@ export default function NewAgentWizard() {
             temperature={temperature} setTemperature={setTemperature}
             selectedTools={selectedTools} setSelectedTools={setSelectedTools}
             selectedSkills={selectedSkills} setSelectedSkills={setSelectedSkills}
-            selectedMcp={selectedMcp} setSelectedMcp={setSelectedMcp}
             onNext={() => setStep(1)}
             sanitizedName={sanitizedName}
           />
