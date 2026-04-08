@@ -25,7 +25,7 @@ import type { Memory } from "@mastra/memory";
 import { LibSQLStore } from "@mastra/libsql";
 import { CronExpressionParser } from "cron-parser";
 
-import { dataPath, getAgentWorkspace } from "../utils/paths.js";
+import { dataPath } from "../utils/paths.js";
 import { initMCPClient, getMCPTools, disconnectMCP } from "../agent/mcp-client.js";
 import { getModelForId } from "../agent/model.js";
 import { allTools } from "../agent/tools/index.js";
@@ -66,6 +66,7 @@ import { setAllowedBinaries } from "../agent/tools/run-command-tool.js";
 import fs from "node:fs";
 import path from "node:path";
 import { logger } from "../utils/external-logger.js";
+import { FilteredMastraLogger } from "../utils/mastra-logger.js";
 
 export { buildPlatformPromptSections, buildPlatformSystemPrompt };
 
@@ -465,12 +466,17 @@ For single sub-agent tasks, skip the handoff file.`;
     const readOnly = !hasWorkspaceWrite;
     // If skills are in an external directory (GOLEM_SKILLS_DIR), disable containment
     // so Mastra can access skill files outside the project root.
+    //
+    // NOTE: Mastra Workspace basePath stays at process.cwd() so skills (which
+    // live in the project root, outside the per-agent sandbox) remain
+    // accessible. The per-agent sandbox is enforced separately via the
+    // `repoPath` requestContext value, which code_agent and run_command read
+    // to scope their cwd.
     const hasExternalSkills = hasSkills && skillPaths.some(p => !p.startsWith(process.cwd()));
-    const workspaceBase = getAgentWorkspace(config.id);
     agentOptions.workspace = new Workspace({
       id: `${config.id}-workspace`,
       name: `${config.id} workspace`,
-      filesystem: new LocalFilesystem({ basePath: workspaceBase, contained: !hasExternalSkills, readOnly }),
+      filesystem: new LocalFilesystem({ basePath: process.cwd(), contained: !hasExternalSkills, readOnly }),
       skills: hasSkills ? skillPaths : undefined,
       bm25: hasSkills,
     });
@@ -970,6 +976,7 @@ export async function startPlatform(): Promise<PlatformContext> {
   new Mastra({
     agents: agentInstances,
     observability,
+    logger: new FilteredMastraLogger({ name: "Mastra", level: "info" }),
     // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Mastra constructor types are complex
   } as any);
 
