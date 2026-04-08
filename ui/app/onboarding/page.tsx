@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { useTheme } from "next-themes";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -18,8 +19,10 @@ import {
   Bot,
   Key,
   MessageSquare,
+  Moon,
   Plug,
   Sparkles,
+  Sun,
   Wrench,
   ExternalLink,
   CheckCircle2,
@@ -43,6 +46,7 @@ const TIER_DESCRIPTIONS = {
 // ── Step Components ───────────────────────────────────
 
 function StepWelcome({ onNext }: { onNext: () => void }) {
+  const { theme, setTheme } = useTheme();
   return (
     <div className="flex flex-col items-center justify-center min-h-[400px] text-center space-y-6">
       <div className="space-y-2">
@@ -58,6 +62,33 @@ function StepWelcome({ onNext }: { onNext: () => void }) {
       <a href="/" className="text-xs text-muted-foreground hover:text-foreground transition-colors">
         Already configured? Skip to dashboard
       </a>
+      <div className="flex items-center gap-2 pt-2 text-xs text-muted-foreground">
+        <span>Theme</span>
+        <button
+          type="button"
+          onClick={() => setTheme("light")}
+          className={`flex items-center gap-1 rounded-md px-2 py-1 transition-colors ${
+            theme === "light"
+              ? "bg-accent text-foreground"
+              : "hover:text-foreground"
+          }`}
+        >
+          <Sun size={12} />
+          Light
+        </button>
+        <button
+          type="button"
+          onClick={() => setTheme("dark")}
+          className={`flex items-center gap-1 rounded-md px-2 py-1 transition-colors ${
+            theme === "dark"
+              ? "bg-accent text-foreground"
+              : "hover:text-foreground"
+          }`}
+        >
+          <Moon size={12} />
+          Dark
+        </button>
+      </div>
     </div>
   );
 }

@@ -126,7 +126,7 @@ function AgentCard({ agent }: { agent: PlatformAgent }) {
           <div className="flex items-center gap-3 text-xs text-muted-foreground">
             <span className="font-mono text-[11px]">{agent.model.split("/").pop()}</span>
             <span className="font-mono tabular-nums">{agent.toolCount} tools</span>
-            <span className="font-mono tabular-nums">{agent.cronCount} crons</span>
+            <span className="font-mono tabular-nums">{agent.cronCount} schedules</span>
           </div>
         </CardContent>
       </Card>
@@ -331,7 +331,7 @@ export default function HomePage() {
                       <EmptyState
                         icon={Activity}
                         title="No activity today"
-                        description="Agent messages, cron runs, and heartbeats will appear here."
+                        description="Agent messages, schedule runs, and heartbeats will appear here."
                       />
                     </td>
                   </tr>

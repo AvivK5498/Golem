@@ -37,7 +37,7 @@ const SECTIONS: NavSection[] = [
     id: "operations",
     label: "Operations",
     items: [
-      { href: "/crons", label: "Crons", icon: Clock },
+      { href: "/schedules", label: "Schedules", icon: Clock },
       { href: "/feed", label: "Feed", icon: Activity },
     ],
   },

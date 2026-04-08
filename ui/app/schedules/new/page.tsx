@@ -74,10 +74,10 @@ function NewCronPageInner() {
         const text = await res.text();
         throw new Error(text || `HTTP ${res.status}`);
       }
-      toast.success("Cron created");
-      router.push("/crons");
+      toast.success("Schedule created");
+      router.push("/schedules");
     } catch (err) {
-      const msg = err instanceof Error ? err.message : "Failed to create cron job";
+      const msg = err instanceof Error ? err.message : "Failed to create schedule";
       setError(msg);
       toast.error(msg);
     } finally {
@@ -92,13 +92,13 @@ function NewCronPageInner() {
     <div className="flex-1 overflow-y-auto">
       <form onSubmit={handleSubmit} className="py-6 px-6 space-y-6">
         <PageHeader
-          title="New Cron Job"
-          breadcrumbs={[{ label: "Crons", href: "/crons" }, { label: "New Cron" }]}
+          title="New Schedule"
+          breadcrumbs={[{ label: "Schedules", href: "/schedules" }, { label: "New Schedule" }]}
         />
 
         <Card>
           <CardHeader>
-            <CardTitle>Cron Job</CardTitle>
+            <CardTitle>Schedule</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-1.5">
@@ -159,7 +159,7 @@ function NewCronPageInner() {
                 This prompt is sent to the selected agent on every run. Be explicit about expected output and side effects.
               </p>
               <div className="rounded-lg border border-border/60 bg-muted/20 p-3 text-xs text-muted-foreground space-y-1">
-                <div className="font-medium text-foreground/80">Tips for effective cron prompts:</div>
+                <div className="font-medium text-foreground/80">Tips for effective schedule prompts:</div>
                 <ul className="list-disc list-inside space-y-0.5">
                   <li>Define the objective clearly</li>
                   <li>Specify the time scope (e.g., &quot;from the last 6 hours&quot;)</li>
@@ -214,11 +214,11 @@ function NewCronPageInner() {
               </div>
             )}
             <div className="flex w-full items-center justify-between">
-              <p className="text-xs text-muted-foreground">Cron jobs run automatically on the selected schedule.</p>
+              <p className="text-xs text-muted-foreground">Schedules run automatically on the selected schedule.</p>
               <div className="flex gap-3">
-                <Link href="/crons" className={cn(buttonVariants({ variant: "outline", size: "sm" }), "text-xs")}>Cancel</Link>
+                <Link href="/schedules" className={cn(buttonVariants({ variant: "outline", size: "sm" }), "text-xs")}>Cancel</Link>
                 <Button type="submit" size="sm" disabled={!canSubmit} className="text-xs">
-                  {submitting ? "Creating..." : "Create Cron"}
+                  {submitting ? "Creating..." : "Create Schedule"}
                 </Button>
               </div>
             </div>
