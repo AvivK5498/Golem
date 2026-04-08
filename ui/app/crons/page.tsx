@@ -57,7 +57,7 @@ const KIND_STYLE: Record<string, string> = {
 function relativeTime(ts: number | null, direction: "past" | "future"): string {
   if (!ts) return "\u2014";
   const diff = direction === "past" ? Date.now() - ts : ts - Date.now();
-  if (diff < 0) return direction === "past" ? "just now" : "overdue";
+  if (diff < 0) return direction === "past" ? "just now" : "< 1m";
   if (diff < 60_000) return direction === "past" ? "just now" : "< 1m";
   if (diff < 3_600_000) {
     const m = Math.floor(diff / 60_000);
@@ -69,6 +69,30 @@ function relativeTime(ts: number | null, direction: "past" | "future"): string {
   }
   const d = Math.floor(diff / 86_400_000);
   return direction === "past" ? `${d}d ago` : `in ${d}d`;
+}
+
+/**
+ * Format the next-run column with three states:
+ * - imminent (within next minute, including up to 1m past): "< 1m"
+ * - late (more than 1m past schedule): "5m late", "2h late" — warning style
+ * - upcoming: "in 5m", "in 23h" — normal
+ */
+function nextRunDisplay(ts: number | null): { text: string; late: boolean } {
+  if (!ts) return { text: "\u2014", late: false };
+  const diff = ts - Date.now();
+  // Within 1 minute either side of now → imminent
+  if (Math.abs(diff) < 60_000) return { text: "< 1m", late: false };
+  // Past schedule by more than 1 minute → late
+  if (diff < 0) {
+    const lateMs = -diff;
+    if (lateMs < 3_600_000) return { text: `${Math.floor(lateMs / 60_000)}m late`, late: true };
+    if (lateMs < 86_400_000) return { text: `${Math.floor(lateMs / 3_600_000)}h late`, late: true };
+    return { text: `${Math.floor(lateMs / 86_400_000)}d late`, late: true };
+  }
+  // Future
+  if (diff < 3_600_000) return { text: `in ${Math.floor(diff / 60_000)}m`, late: false };
+  if (diff < 86_400_000) return { text: `in ${Math.floor(diff / 3_600_000)}h`, late: false };
+  return { text: `in ${Math.floor(diff / 86_400_000)}d`, late: false };
 }
 
 function formatSchedule(cron: CronJob): string {
@@ -194,7 +218,7 @@ export default function CronsPage() {
     const nearest = activeTasks.reduce((min, t) =>
       t.next_run_at! < min.next_run_at! ? t : min,
     );
-    return relativeTime(nearest.next_run_at, "future");
+    return nextRunDisplay(nearest.next_run_at).text;
   }, [tasks]);
 
   const lastActivityLabel = useMemo(() => {
@@ -353,10 +377,17 @@ export default function CronsPage() {
                           </span>
                         </div>
                       </td>
-                      <td className="px-4 py-2.5 text-muted-foreground tabular-nums">
-                        {isPaused
-                          ? "\u2014"
-                          : relativeTime(task.next_run_at, "future")}
+                      <td className="px-4 py-2.5 tabular-nums">
+                        {isPaused ? (
+                          <span className="text-muted-foreground">{"\u2014"}</span>
+                        ) : (() => {
+                          const { text, late } = nextRunDisplay(task.next_run_at);
+                          return (
+                            <span className={late ? "text-[var(--status-warning)]" : "text-muted-foreground"}>
+                              {text}
+                            </span>
+                          );
+                        })()}
                       </td>
                       <td className="px-4 py-2.5 text-muted-foreground tabular-nums">
                         {relativeTime(task.last_run_at, "past")}
@@ -380,18 +411,18 @@ export default function CronsPage() {
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end" side="bottom">
                             <DropdownMenuItem
-                              onSelect={() =>
+                              onClick={() =>
                                 (window.location.href = `/crons/${task.id}`)
                               }
                             >
                               <Edit className="h-4 w-4" />
                               Edit
                             </DropdownMenuItem>
-                            <DropdownMenuItem onSelect={() => runNow(task)}>
+                            <DropdownMenuItem onClick={() => runNow(task)}>
                               <Play className="h-4 w-4" />
                               Run Now
                             </DropdownMenuItem>
-                            <DropdownMenuItem onSelect={() => togglePause(task)}>
+                            <DropdownMenuItem onClick={() => togglePause(task)}>
                               {isPaused ? (
                                 <>
                                   <Play className="h-4 w-4" />
@@ -407,7 +438,7 @@ export default function CronsPage() {
                             <DropdownMenuSeparator />
                             <DropdownMenuItem
                               variant="destructive"
-                              onSelect={() => setDeleteTarget(task)}
+                              onClick={() => setDeleteTarget(task)}
                             >
                               <Trash2 className="h-4 w-4" />
                               Delete

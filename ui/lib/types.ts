@@ -58,6 +58,7 @@ export interface AgentConfig {
 }
 
 export interface HealthInfo {
+  startedAt: number;
   uptime: number;
   uptimeHuman: string;
   memory: { rss: number; heap: number; heapTotal: number };

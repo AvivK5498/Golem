@@ -5,8 +5,6 @@ import { useEffect } from "react";
 import { AppSidebar } from "@/components/app-sidebar";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { useFetch } from "@/lib/use-api";
-import { POLL_INTERVAL_MS } from "@/lib/constants";
-import type { HealthInfo } from "@/lib/types";
 
 interface SetupStatus {
   configured: boolean;
@@ -17,8 +15,10 @@ interface SetupStatus {
 export function LayoutShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
-  const isFullScreen = pathname.startsWith("/onboarding") || pathname === "/agents/new";
-  const { data: health } = useFetch<HealthInfo>("/api/health", POLL_INTERVAL_MS);
+  const isFullScreen =
+    pathname.startsWith("/onboarding") ||
+    pathname === "/agents/new" ||
+    pathname.startsWith("/restarting");
   const { data: setup } = useFetch<SetupStatus>("/api/setup/status", 0);
 
   useEffect(() => {
@@ -34,7 +34,7 @@ export function LayoutShell({ children }: { children: React.ReactNode }) {
   return (
     <TooltipProvider delay={100}>
       <div className="flex h-screen overflow-hidden">
-        <AppSidebar health={health} />
+        <AppSidebar />
         <main className="flex-1 overflow-auto px-6 py-8">
           <div className="mx-auto max-w-6xl">
             {children}

@@ -82,10 +82,10 @@
   --accent-foreground: #141414;
 
   /* Text hierarchy */
-  --foreground: #141414;        /* primary text — headings, important */
-  --card-foreground: #141414;
-  --popover-foreground: #141414;
-  --muted-foreground: #5F5F5F;  /* secondary text — body, descriptions */
+  --foreground: #2A2A2E;        /* primary text — softer charcoal, easier on the eye than pure black */
+  --card-foreground: #2A2A2E;
+  --popover-foreground: #2A2A2E;
+  --muted-foreground: #6B6B70;  /* secondary text — body, descriptions */
 
   /* Semantic status */
   --destructive: #DC2626;
@@ -255,6 +255,15 @@
 }
 .status-dot-pulse {
   animation: pulse-dot 2s ease-in-out infinite;
+}
+
+/* Soft pulse for restart-required indicator */
+@keyframes pulse-soft {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.55; }
+}
+.animate-pulse-soft {
+  animation: pulse-soft 1.8s ease-in-out infinite;
 }
 
 /* Skeleton loading animation */

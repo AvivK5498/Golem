@@ -150,8 +150,11 @@ export class AgentRunner {
       agentId,
     });
 
+    const { getAgentWorkspace } = await import("../utils/paths.js");
+
     const requestContext = new Map<string, unknown>();
     requestContext.set("agentId", agentId);
+    requestContext.set("repoPath", getAgentWorkspace(agentId));
     requestContext.set("chatType", chatType);
     requestContext.set("promptMode", promptMode);
     requestContext.set("jid", chatId);
@@ -276,13 +279,14 @@ export class AgentRunner {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any -- CoreMessage content types are complex
       let messageInput: any = text;
       if (options.imageData) {
-        const imageBytes = options.imageData.filePath
-          ? new Uint8Array(fs.readFileSync(options.imageData.filePath))
-          : new Uint8Array(Buffer.from(options.imageData.base64, "base64"));
+        const base64 = options.imageData.filePath
+          ? fs.readFileSync(options.imageData.filePath).toString("base64")
+          : options.imageData.base64;
+        const dataUri = `data:${options.imageData.mimeType};base64,${base64}`;
         messageInput = [{
           role: "user" as const,
           content: [
-            { type: "image" as const, image: imageBytes, mimeType: options.imageData.mimeType },
+            { type: "image" as const, image: dataUri, mimeType: options.imageData.mimeType },
             { type: "text" as const, text: text || "What do you see in this image?" },
           ],
         }];

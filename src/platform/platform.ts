@@ -25,7 +25,7 @@ import type { Memory } from "@mastra/memory";
 import { LibSQLStore } from "@mastra/libsql";
 import { CronExpressionParser } from "cron-parser";
 
-import { dataPath } from "../utils/paths.js";
+import { dataPath, getAgentWorkspace } from "../utils/paths.js";
 import { initMCPClient, getMCPTools, disconnectMCP } from "../agent/mcp-client.js";
 import { getModelForId } from "../agent/model.js";
 import { allTools } from "../agent/tools/index.js";
@@ -466,10 +466,11 @@ For single sub-agent tasks, skip the handoff file.`;
     // If skills are in an external directory (GOLEM_SKILLS_DIR), disable containment
     // so Mastra can access skill files outside the project root.
     const hasExternalSkills = hasSkills && skillPaths.some(p => !p.startsWith(process.cwd()));
+    const workspaceBase = getAgentWorkspace(config.id);
     agentOptions.workspace = new Workspace({
       id: `${config.id}-workspace`,
       name: `${config.id} workspace`,
-      filesystem: new LocalFilesystem({ basePath: process.cwd(), contained: !hasExternalSkills, readOnly }),
+      filesystem: new LocalFilesystem({ basePath: workspaceBase, contained: !hasExternalSkills, readOnly }),
       skills: hasSkills ? skillPaths : undefined,
       bm25: hasSkills,
     });
