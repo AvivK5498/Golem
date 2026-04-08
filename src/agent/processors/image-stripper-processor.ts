@@ -1,10 +1,20 @@
 /**
- * ImageStripperProcessor — strips base64 image/file data from recalled history
- * so old images don't bloat the context window on subsequent turns.
+ * ImageStripperProcessor — strips base64 image/file data from messages so old
+ * images don't bloat the context window on subsequent turns.
  *
- * - processInputStep: strips images from RECALLED history messages only,
- *   preserving the current user message's image so the LLM can see it.
- * - processOutputResult: strips all images before persisting to memory.
+ * Lifecycle:
+ * - processInputStep (step 0): strips images from recalled history but
+ *   PRESERVES the current user message so the LLM can see the new image.
+ * - processInputStep (step 1+): strips everything (LLM already saw it on step 0).
+ * - processOutputStep: runs after every LLM step. Strips images from ALL
+ *   messages including the user input. By the time this fires, the LLM has
+ *   already seen the input on the current step, so stripping is safe and it
+ *   ensures the user input message is persisted to memory WITHOUT the base64
+ *   blob (which would otherwise consume ~119K tokens per recalled image and
+ *   blow Mastra's TokenLimiterProcessor budget on the next turn).
+ * - processOutputResult: strips images from response messages before save.
+ *   (Mastra only passes response messages to processOutputResult — input
+ *   messages are handled by processOutputStep above.)
  */
 import type { Processor } from "@mastra/core/processors";
 import type { MastraDBMessage } from "@mastra/core/memory";
@@ -56,8 +66,23 @@ export class ImageStripperProcessor implements Processor {
     });
   }
 
-  /** Strip all images before persisting to memory. */
+  /** Strip all images from response messages before persisting to memory. */
   async processOutputResult({ messages }: {
+    messages: MastraDBMessage[];
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    [key: string]: any;
+  }): Promise<MastraDBMessage[]> {
+    return this.stripImages(messages);
+  }
+
+  /**
+   * After every LLM step, strip images from ALL messages in the messageList
+   * (including the user input). At this point the LLM has already consumed the
+   * image on the current step, so it's safe to strip. This guarantees that
+   * when Mastra persists unsaved messages at the end of the run, the user
+   * input message no longer carries the base64 blob.
+   */
+  async processOutputStep({ messages }: {
     messages: MastraDBMessage[];
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     [key: string]: any;

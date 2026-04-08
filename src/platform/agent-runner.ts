@@ -238,6 +238,26 @@ export class AgentRunner {
         })(),
       };
 
+      // Disable Gemini's aggressive safety filters when running on a Google model.
+      // Gemini Pro Preview returns empty completions for innocuous food/body images,
+      // which silently breaks the conversation. Personal-use platform → user trusts
+      // their own prompts. Hardcoded "core harm" protections (CSAM etc.) still apply.
+      const isGeminiModel = resolvedModel.startsWith("google/") || resolvedModel.includes("gemini");
+      if (isGeminiModel) {
+        generateOptions.providerOptions = {
+          ...(generateOptions.providerOptions || {}),
+          google: {
+            ...(generateOptions.providerOptions?.google || {}),
+            safetySettings: [
+              { category: "HARM_CATEGORY_HARASSMENT",        threshold: "BLOCK_NONE" },
+              { category: "HARM_CATEGORY_HATE_SPEECH",       threshold: "BLOCK_NONE" },
+              { category: "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold: "BLOCK_NONE" },
+              { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_NONE" },
+            ],
+          },
+        };
+      }
+
       // Track the last progressively sent text verbatim so we can deduplicate the final message
       // Track cumulative text to extract per-step deltas (Mastra sends accumulated text, not deltas)
       let lastSentProgressText = "";
@@ -279,6 +299,10 @@ export class AgentRunner {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any -- CoreMessage content types are complex
       let messageInput: any = text;
       if (options.imageData) {
+        // Pass the image as a base64 data URI — the format that works most
+        // consistently across providers (Claude, GPT, Gemini Flash all accept it).
+        // Gemini Pro Preview has a separate issue with multi-image conversation
+        // history but this format itself is correct.
         const base64 = options.imageData.filePath
           ? fs.readFileSync(options.imageData.filePath).toString("base64")
           : options.imageData.base64;
@@ -292,6 +316,14 @@ export class AgentRunner {
         }];
       }
 
+      // DEBUG: log what we're about to pass to agent.generate()
+      if (options.imageData) {
+        const debugPreview = JSON.stringify(messageInput, (k, v) =>
+          typeof v === "string" && v.length > 80 ? `<${v.length} chars>` : v
+        ).slice(0, 500);
+        console.log(`[${agentId}] [DEBUG] generate() input with image: ${debugPreview}`);
+      }
+
       // Retry with backoff + fallback model on transient errors
       const generateFn = () => this.agent.generate(messageInput, generateOptions);
       let result;
@@ -301,7 +333,7 @@ export class AgentRunner {
         if (isTransientApiError(err)) {
           console.warn(`[${agentId}] retries exhausted, falling back to ${FALLBACK_MODEL}`);
           try { logger.warn(`Retries exhausted, falling back to ${FALLBACK_MODEL}`, { agent: agentId, chatType }); } catch { /* ignore */ }
-          result = await this.agent.generate(text, {
+          result = await this.agent.generate(messageInput, {
             ...generateOptions,
             model: getModelForId(FALLBACK_MODEL),
             // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Mastra generate accepts model override at runtime
@@ -344,6 +376,33 @@ export class AgentRunner {
         result = { ...result, text: fallback };
       }
 
+      // Empty-response detection: if the LLM returned no text AND no tool calls
+      // (i.e. not just routing to a tool), the model silently failed. Common causes:
+      // safety filter blocking (Gemini on food/body images), provider error swallowed,
+      // bad prompt, or model API issue. Surface a clear message to the user with the
+      // reason if one is available.
+      if (!result.text?.trim() && !asyncJobDispatched) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- finishReason on Mastra result
+        const finishReason = (result as any).finishReason as string | undefined;
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- last step finishReason
+        const lastStepReason = steps?.[steps.length - 1] && (steps[steps.length - 1] as any).finishReason as string | undefined;
+        const reason = finishReason || lastStepReason || "unknown";
+
+        const reasonMessage: Record<string, string> = {
+          "content-filter": "the model's safety filter blocked the response",
+          "content_filter": "the model's safety filter blocked the response",
+          "length": "the response exceeded the model's output length limit",
+          "error": "the model returned an error",
+          "other": "the model returned an unexpected stop reason",
+        };
+        const explanation = reasonMessage[reason] || `the model returned no content (reason: ${reason})`;
+
+        const fallback = `I couldn't generate a response — ${explanation}. Try rephrasing or sending without the attached image.`;
+        console.warn(`[${agentId}] empty LLM response — finishReason=${reason}`);
+        try { logger.warn(`Empty LLM response — finishReason=${reason}`, { agent: agentId, chatType, finishReason: reason }); } catch { /* ignore */ }
+        result = { ...result, text: fallback };
+      }
+
       // Stale response detection — retry once if response hash matches recent.
       // Skip when an async job was dispatched — the confirmation message IS the
       // expected response, and retrying would re-enter the agentic loop.
@@ -351,10 +410,21 @@ export class AgentRunner {
       if (!asyncJobDispatched && this.isStaleResponse(chatId, responseHash)) {
         console.warn(`[${agentId}] stale response detected for ${chatId}, retrying...`);
         try { logger.warn("Stale response detected, retrying", { agent: agentId, chatType, chatId }); } catch { /* ignore */ }
-        result = await this.agent.generate(
-          `${text}\n\n[System: Your previous response was identical to a recent one. Please provide a fresh, different response.]`,
-          generateOptions,
-        );
+        const staleNote = "\n\n[System: Your previous response was identical to a recent one. Please provide a fresh, different response.]";
+        // Preserve the multimodal input on retry — passing `text` alone would
+        // drop the image attachment and silently degrade the conversation.
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- CoreMessage content types are complex
+        let staleRetryInput: any = `${text}${staleNote}`;
+        if (options.imageData) {
+          staleRetryInput = [{
+            role: "user" as const,
+            content: [
+              ...messageInput[0].content.filter((p: { type: string }) => p.type !== "text"),
+              { type: "text" as const, text: `${text || "What do you see in this image?"}${staleNote}` },
+            ],
+          }];
+        }
+        result = await this.agent.generate(staleRetryInput, generateOptions);
       }
       this.recordResponseHash(chatId, this.simpleHash(result.text || ""));
 

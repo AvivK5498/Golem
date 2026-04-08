@@ -389,8 +389,21 @@ export class TelegramTransport implements MessageTransport {
     let filename: string | undefined;
 
     if (msg.photo) {
-      // Get largest photo size
-      const photo = msg.photo[msg.photo.length - 1];
+      // Telegram pre-generates several thumbnail sizes (typically 90/320/800/1280 + original).
+      // Pick the largest size with long edge ≤ 1280px: vision models downscale to this
+      // resolution anyway, so we get equivalent quality at ~50–150KB instead of multi-MB.
+      // Falls back to the smallest available if every size exceeds the cap (rare —
+      // only for very-wide-aspect images where Telegram skipped intermediate sizes).
+      //
+      // Why this matters: Mastra's TokenLimiterProcessor counts file parts via
+      // JSON.stringify(part), which charges the full base64 length to the token budget.
+      // A 197KB image base64-encodes to ~180K tokens, exceeding the 170K limit and
+      // causing the user message to be silently dropped before reaching the LLM.
+      const MAX_EDGE = 1280;
+      const photo =
+        msg.photo
+          .filter((p) => Math.max(p.width, p.height) <= MAX_EDGE)
+          .at(-1) ?? msg.photo[0];
       fileId = photo.file_id;
       mimeType = "image/jpeg";
       type = "image";
