@@ -376,6 +376,7 @@ export function startServer(deps: ServerDeps) {
       const uptimeMs = Date.now() - startedAt;
       const mem = process.memoryUsage();
       return json(res, {
+        startedAt,
         uptime: uptimeMs,
         uptimeHuman: `${Math.floor(uptimeMs / 3_600_000)}h ${Math.floor((uptimeMs % 3_600_000) / 60_000)}m`,
         memory: {

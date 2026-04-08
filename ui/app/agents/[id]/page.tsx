@@ -12,6 +12,7 @@ import { PageHeader } from "@/components/page-header";
 import { AutoTextarea } from "@/components/auto-textarea";
 import { ModelCombobox } from "@/components/model-combobox";
 import { toast } from "sonner";
+import { useRestartRequired } from "@/lib/use-restart-required";
 import type { OpenRouterModel, CronJob } from "@/lib/types";
 
 interface AgentDetail {
@@ -1121,6 +1122,7 @@ function ProactiveTab({ agentId, settingsData, refetchSettings }: {
 
 export default function AgentEditPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
+  const { markRequired } = useRestartRequired();
 
   const { data } = useFetch<AgentDetail>(`/api/platform/agents/${id}`);
   const { data: modelsData } = useFetch<{ models: OpenRouterModel[] }>("/api/models");
@@ -1261,7 +1263,7 @@ export default function AgentEditPage({ params }: { params: Promise<{ id: string
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(updated),
       });
-      if (res.ok) toast.success("Saved -- restart to apply");
+      if (res.ok) { markRequired(); toast.success("Saved — restart to apply"); }
       else toast.error("Failed to save config");
     } finally {
       setSaving(false);
@@ -1283,6 +1285,7 @@ export default function AgentEditPage({ params }: { params: Promise<{ id: string
       });
       if (res.ok) {
         refetchSettings();
+        markRequired();
         toast.success("Saved — restart to apply");
       } else toast.error("Failed to save tools");
     } finally {
@@ -1351,7 +1354,7 @@ export default function AgentEditPage({ params }: { params: Promise<{ id: string
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(updated),
       });
-      if (res.ok) toast.success("Saved -- restart to apply");
+      if (res.ok) { markRequired(); toast.success("Saved — restart to apply"); }
       else toast.error("Failed to save transport config");
     } finally {
       setSaving(false);

@@ -1,10 +1,10 @@
 /**
- * ImageStripperProcessor — strips base64 image/file data from messages
- * before they are persisted to conversation history.
+ * ImageStripperProcessor — strips base64 image/file data from recalled history
+ * so old images don't bloat the context window on subsequent turns.
  *
- * Runs as an output processor AFTER the model has seen the image.
- * Replaces image parts with a text placeholder so subsequent turns
- * don't replay massive base64 blobs (100-200KB per image).
+ * - processInputStep: strips images from RECALLED history messages only,
+ *   preserving the current user message's image so the LLM can see it.
+ * - processOutputResult: strips all images before persisting to memory.
  */
 import type { Processor } from "@mastra/core/processors";
 import type { MastraDBMessage } from "@mastra/core/memory";
@@ -56,6 +56,7 @@ export class ImageStripperProcessor implements Processor {
     });
   }
 
+  /** Strip all images before persisting to memory. */
   async processOutputResult({ messages }: {
     messages: MastraDBMessage[];
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -64,11 +65,27 @@ export class ImageStripperProcessor implements Processor {
     return this.stripImages(messages);
   }
 
-  async processInputStep({ messages }: {
+  /**
+   * Strip images from recalled history only — preserve the latest user message
+   * so the LLM can see the current image on step 0.
+   */
+  async processInputStep({ messages, stepNumber }: {
     messages: MastraDBMessage[];
+    stepNumber?: number;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     [key: string]: any;
   }): Promise<MastraDBMessage[]> {
+    // On step 0: strip all EXCEPT the last user message (the current one with the image)
+    if ((stepNumber ?? 0) === 0 && messages.length > 0) {
+      const lastUserIdx = messages.findLastIndex(m => (m as { role?: string }).role === "user");
+      if (lastUserIdx >= 0) {
+        const before = this.stripImages(messages.slice(0, lastUserIdx));
+        const current = messages[lastUserIdx]; // keep as-is
+        const after = this.stripImages(messages.slice(lastUserIdx + 1));
+        return [...before, current, ...after];
+      }
+    }
+    // On step 1+: strip everything (the LLM already saw it on step 0)
     return this.stripImages(messages);
   }
 }

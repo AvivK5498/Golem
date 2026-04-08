@@ -105,7 +105,14 @@ export class ClaudeBackend implements CodingRuntime {
   async execute(task: string, cwd: string, onProgress?: ProgressCallback, model?: string): Promise<CodingResult> {
     const start = Date.now();
     console.log(`[coding] ClaudeBackend.execute: model=${model || "default"}, cwd=${cwd}, task=${task.slice(0, 100)}`);
-    const prompt = `Working directory: ${cwd}\nAll files MUST be created inside this directory. Never write to ~, /tmp, or /root.\n\n${task}`;
+    const prompt =
+      `Working directory: ${cwd}\n` +
+      `All files MUST be created inside this directory. Never write to ~, /tmp, or /root.\n\n` +
+      `${task}\n\n` +
+      `When done, end with a brief structured summary:\n` +
+      `Status: success or failure\n` +
+      `Changes:\n- what you did (1-3 bullets)\n` +
+      `Files: list of files created or modified`;
     const parser = createStreamParser(onProgress);
     const args = ["-p", prompt, "--dangerously-skip-permissions", "--output-format", "stream-json", "--verbose"];
     if (model) args.push("--model", model);

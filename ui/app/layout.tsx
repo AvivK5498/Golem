@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Inter, JetBrains_Mono } from "next/font/google";
+import { Inter, JetBrains_Mono, Jost } from "next/font/google";
 import "./globals.css";
 import { LayoutShell } from "./layout-shell";
 import { Toaster } from "@/components/ui/sonner";
@@ -18,6 +18,13 @@ const jetbrainsMono = JetBrains_Mono({
   display: "swap",
 });
 
+const jost = Jost({
+  subsets: ["latin"],
+  variable: "--font-jost",
+  display: "swap",
+  weight: ["300", "400", "500"],
+});
+
 export const metadata: Metadata = {
   title: {
     default: APP_NAME,
@@ -31,7 +38,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" suppressHydrationWarning className={`${inter.variable} ${jetbrainsMono.variable}`}>
+    <html lang="en" suppressHydrationWarning className={`${inter.variable} ${jetbrainsMono.variable} ${jost.variable}`}>
       <body className="antialiased">
         <Providers>
           <LayoutShell>{children}</LayoutShell>

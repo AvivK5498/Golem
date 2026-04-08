@@ -63,7 +63,7 @@ const SENSITIVE_PATTERNS = [
   ".env",
 ];
 
-function findBlockedPath(command: string): string | null {
+function findBlockedPath(command: string, allowedPaths: string[] = ALLOWED_PATHS): string | null {
   const pathRegex = /(?:^|\s)(~\/[^\s;|&"']+|\/[^\s;|&"']+|\.\.\/[^\s;|&"']+)/g;
   let match: RegExpExecArray | null;
 
@@ -80,7 +80,7 @@ function findBlockedPath(command: string): string | null {
       return p;
     }
 
-    const isAllowed = ALLOWED_PATHS.some(allowed => p.startsWith(allowed));
+    const isAllowed = allowedPaths.some(allowed => p.startsWith(allowed));
     if (!isAllowed) {
       return p;
     }
@@ -151,9 +151,12 @@ export const runCommandTool = createTool({
       }
     }
 
-    const blockedPath = findBlockedPath(fullCommand);
+    // Include agent workspace in allowed paths for this request
+    const agentWorkspace = context?.requestContext?.get("repoPath" as never) as unknown as string | undefined;
+    const effectiveAllowedPaths = agentWorkspace ? [...ALLOWED_PATHS, path.resolve(agentWorkspace)] : ALLOWED_PATHS;
+    const blockedPath = findBlockedPath(fullCommand, effectiveAllowedPaths);
     if (blockedPath) {
-      return toolError(`Access denied: path "${blockedPath}" is outside allowed directories: ${ALLOWED_PATHS.map(p => p.replace(os.homedir(), "~")).join(", ")}`);
+      return toolError(`Access denied: path "${blockedPath}" is outside allowed directories: ${effectiveAllowedPaths.map(p => p.replace(os.homedir(), "~")).join(", ")}`);
     }
 
     const requestContext = context?.requestContext;
@@ -213,6 +216,9 @@ export const runCommandTool = createTool({
         }
       : undefined;
 
+    // Use agent workspace as cwd when available (sandboxed per-agent directory)
+    const workspaceCwd = context?.requestContext?.get("repoPath" as never) as unknown as string | undefined;
+
     try {
       const { stdout, stderr } = await execAsync(
         fullCommand,
@@ -220,6 +226,7 @@ export const runCommandTool = createTool({
           timeout,
           maxBuffer: 2 * 1024 * 1024,
           shell: "/bin/bash",
+          ...(workspaceCwd && { cwd: workspaceCwd }),
           ...(mergedEnv && { env: mergedEnv }),
         },
       );

@@ -25,6 +25,13 @@ export function getSkillsDir(): string {
   return _skillsDir;
 }
 
+/** Per-agent sandboxed workspace directory. Created on first access. */
+export function getAgentWorkspace(agentId: string): string {
+  const dir = path.join(getDataDir(), "workspaces", agentId);
+  fs.mkdirSync(dir, { recursive: true });
+  return dir;
+}
+
 /** Resolve a filename relative to the data directory */
 export function dataPath(filename: string): string {
   return path.join(getDataDir(), filename);
