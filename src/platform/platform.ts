@@ -65,6 +65,7 @@ import { AsyncJobGuard } from "../agent/processors/async-job-guard.js";
 import { setAllowedBinaries } from "../agent/tools/run-command-tool.js";
 import fs from "node:fs";
 import path from "node:path";
+import sharp from "sharp";
 import { logger } from "../utils/external-logger.js";
 import { FilteredMastraLogger, installConsoleFilter } from "../utils/mastra-logger.js";
 
@@ -711,8 +712,49 @@ function registerAgentTransport(
       }
     } else if (msg.media?.type === "image" && msg.media.filePath) {
       console.log(`[${runner.agentId}] processing image with vision`);
-      const base64 = fs.readFileSync(msg.media.filePath).toString("base64");
-      imageData = { base64, mimeType: msg.media.mimeType || "image/jpeg", filePath: msg.media.filePath };
+      // Explicit `Buffer` annotation: fs.readFileSync returns Buffer<ArrayBufferLike>
+      // and sharp.toBuffer() returns Buffer<NonSharedBuffer>; TS won't reconcile
+      // them via control-flow narrowing without an explicit widening.
+      let buffer: Buffer = fs.readFileSync(msg.media.filePath);
+
+      // Re-encode oversize images. Mastra's TokenLimiterProcessor counts file
+      // parts by JSON.stringify'ing them and tokenizing the base64 blob, which
+      // means a 200KB JPEG consumes ~180K tokens — exceeding the 170K budget
+      // and causing the user message to be silently dropped from the prompt.
+      // Cap at ~80KB (~73K tokens) to leave room for system prompts and
+      // recalled history. JPEG compression is content-dependent, so we walk
+      // an iterative ladder until the encoded size fits.
+      const MAX_IMAGE_BYTES = 80 * 1024;
+      if (buffer.length > MAX_IMAGE_BYTES) {
+        const original = buffer.length;
+        const ladder: Array<{ width: number; quality: number }> = [
+          { width: 1280, quality: 75 },
+          { width: 1024, quality: 65 },
+          { width: 800, quality: 55 },
+          { width: 640, quality: 55 },
+          { width: 512, quality: 60 },
+        ];
+        try {
+          for (const { width, quality } of ladder) {
+            buffer = await sharp(msg.media.filePath)
+              .rotate() // honor EXIF orientation before stripping metadata
+              .resize({ width, withoutEnlargement: true })
+              .jpeg({ quality })
+              .toBuffer();
+            if (buffer.length <= MAX_IMAGE_BYTES) break;
+          }
+          console.log(`[${runner.agentId}] image re-encoded ${original} → ${buffer.length} bytes`);
+        } catch (err) {
+          console.warn(`[${runner.agentId}] sharp re-encode failed (${err instanceof Error ? err.message : String(err)}), sending original`);
+          buffer = fs.readFileSync(msg.media.filePath);
+        }
+      }
+
+      // Pass the (possibly re-encoded) buffer as base64. Do NOT set filePath:
+      // agent-runner.ts re-reads filePath if present, which would defeat the
+      // re-encode by reloading the original from disk.
+      const base64 = buffer.toString("base64");
+      imageData = { base64, mimeType: "image/jpeg" };
       // Fix #9: embed media reference for group history persistence
       effectiveText = chatType === "group" ? `[Image attached] ${msg.text || ""}` : (msg.text || "");
     } else if (msg.media?.type === "video" && msg.media.filePath) {

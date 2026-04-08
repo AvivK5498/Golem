@@ -1156,6 +1156,7 @@ export default function AgentEditPage({ params }: { params: Promise<{ id: string
   const [modelOverrideEnabled, setModelOverrideEnabled] = useState(false);
   const [temperature, setTemperature] = useState(0.2);
   const [maxSteps, setMaxSteps] = useState(50);
+  const [reasoningEffort, setReasoningEffort] = useState("medium");
   const [visionModel, setVisionModel] = useState("");
 
   // -- Tools state --
@@ -1203,6 +1204,7 @@ export default function AgentEditPage({ params }: { params: Promise<{ id: string
     if (settingsData["memory.workingMemory.scope"]) setWmScope(settingsData["memory.workingMemory.scope"]);
     if (settingsData["llm.temperature"]) setTemperature(Number(settingsData["llm.temperature"]) || 0.2);
     if (settingsData["llm.maxSteps"]) setMaxSteps(Number(settingsData["llm.maxSteps"]) || 50);
+    if (settingsData["llm.reasoningEffort"]) setReasoningEffort(settingsData["llm.reasoningEffort"]);
     if (settingsData["allowedGroups"]) setAllowedGroups(settingsData["allowedGroups"]);
     if (settingsData["adminGroups"]) setAdminGroups(settingsData["adminGroups"]);
   }, [settingsData]);
@@ -1217,13 +1219,11 @@ export default function AgentEditPage({ params }: { params: Promise<{ id: string
     setRole(c.role || "");
     setPersona(data.persona);
     setProvider(c.llm.provider);
-    setModel(c.llm.model);
-    // Check if the model is a tier value or a custom override
-    try {
-      const gTiers = globalSettings?.["global.llm.tiers"] ? JSON.parse(globalSettings["global.llm.tiers"]) : {};
-      const tierValues = Object.values(gTiers);
-      setModelOverrideEnabled(!!c.llm.model && !tierValues.includes(c.llm.model));
-    } catch { setModelOverrideEnabled(false); }
+    // Note: model + modelOverrideEnabled are computed in a separate effect
+    // below that depends on both `data` and `settingsData`. settings.db is the
+    // runtime source of truth for the per-agent model override; agents.db can
+    // hold stale literals from older agent-creation paths and would otherwise
+    // light up the override toggle even when no override is configured.
     setTemperature(c.llm.temperature);
     setMaxSteps(c.llm.maxSteps);
     setVisionModel(c.llm.vision?.model || "");
@@ -1239,6 +1239,24 @@ export default function AgentEditPage({ params }: { params: Promise<{ id: string
     setAllowedGroups((c.allowedGroups || []).join(", "));
     setAdminGroups((c.adminGroups || []).join(", "));
   }, [data]);
+
+  // Resolve the effective model from settings.db (the runtime source of truth)
+  // with agents.db as a fallback. This must depend on both `data` and
+  // `settingsData` so that whichever fetch resolves last still produces a
+  // correct override-toggle state. settings.db with an empty string means
+  // "no override" (use the active tier); a non-empty value means override.
+  useEffect(() => {
+    if (!data) return;
+    const c = data.config;
+    const settingsModel = settingsData?.["llm.model"];
+    const effectiveModel = settingsModel !== undefined ? settingsModel : (c.llm.model || "");
+    setModel(effectiveModel);
+    try {
+      const gTiers = globalSettings?.["global.llm.tiers"] ? JSON.parse(globalSettings["global.llm.tiers"]) : {};
+      const tierValues = Object.values(gTiers);
+      setModelOverrideEnabled(!!effectiveModel && !tierValues.includes(effectiveModel));
+    } catch { setModelOverrideEnabled(false); }
+  }, [data, settingsData, globalSettings]);
 
   /** Save identity fields to agents.db (requires restart) */
   async function saveIdentity() {
@@ -1315,7 +1333,7 @@ export default function AgentEditPage({ params }: { params: Promise<{ id: string
     }
   }
 
-  /** Save model settings (temperature, maxSteps) to settings.db (immediate effect) */
+  /** Save model settings (temperature, maxSteps, reasoningEffort) to settings.db (immediate effect) */
   async function saveModelSettings() {
     setSaving(true);
     try {
@@ -1325,6 +1343,7 @@ export default function AgentEditPage({ params }: { params: Promise<{ id: string
         body: JSON.stringify({
           "llm.temperature": temperature,
           "llm.maxSteps": maxSteps,
+          "llm.reasoningEffort": reasoningEffort,
         }),
       });
       if (res.ok) {
@@ -1659,7 +1678,7 @@ export default function AgentEditPage({ params }: { params: Promise<{ id: string
                   </CardContent>
                 </Card>
 
-                {/* Model override — pick any OpenRouter model for this agent */}
+                {/* Model override — pick any OpenRouter model for this agent (auto-saves) */}
                 <Card size="sm">
                   <CardHeader className="border-b">
                     <div className="flex items-center justify-between">
@@ -1696,6 +1715,18 @@ export default function AgentEditPage({ params }: { params: Promise<{ id: string
                         )}
                       </div>
                     )}
+                  </CardContent>
+                </Card>
+
+                {/* Model settings — applies regardless of whether the model is tier-resolved or overridden */}
+                <Card size="sm">
+                  <CardHeader className="border-b">
+                    <div className="flex items-center justify-between">
+                      <CardTitle className="text-xs">Model Settings</CardTitle>
+                      <span className="text-[9px] text-muted-foreground">restart required</span>
+                    </div>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
                     <div className="grid grid-cols-2 gap-4">
                       <div className="flex flex-col gap-1.5">
                         <label className={labelClass}>Temperature</label>
@@ -1705,6 +1736,21 @@ export default function AgentEditPage({ params }: { params: Promise<{ id: string
                         <label className={labelClass}>Max Steps</label>
                         <input type="number" value={maxSteps} onChange={e => setMaxSteps(Number(e.target.value))} min={1} max={100} className={numberInputClass} />
                       </div>
+                    </div>
+                    <div className="flex flex-col gap-1.5">
+                      <label className={labelClass}>Reasoning Effort</label>
+                      <select
+                        value={reasoningEffort}
+                        onChange={e => setReasoningEffort(e.target.value)}
+                        className={`${inputClass} h-[38px]`}
+                      >
+                        <option value="xhigh">xhigh</option>
+                        <option value="high">high</option>
+                        <option value="medium">medium</option>
+                        <option value="low">low</option>
+                        <option value="minimal">minimal</option>
+                        <option value="none">none</option>
+                      </select>
                     </div>
                     <div className="flex justify-end pt-2">
                       <Button onClick={saveModelSettings} disabled={saving} size="sm">{saving ? "Saving..." : "Save Model Settings"}</Button>
