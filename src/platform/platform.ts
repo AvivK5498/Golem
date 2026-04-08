@@ -66,7 +66,12 @@ import { setAllowedBinaries } from "../agent/tools/run-command-tool.js";
 import fs from "node:fs";
 import path from "node:path";
 import { logger } from "../utils/external-logger.js";
-import { FilteredMastraLogger } from "../utils/mastra-logger.js";
+import { FilteredMastraLogger, installConsoleFilter } from "../utils/mastra-logger.js";
+
+// Suppress noisy intentional aborts (e.g. AsyncJobGuard tripwire stack traces)
+// at the console level — Mastra's input-processor workflow uses a private
+// ExecutionEngine that bypasses the configured logger.
+installConsoleFilter();
 
 export { buildPlatformPromptSections, buildPlatformSystemPrompt };
 
