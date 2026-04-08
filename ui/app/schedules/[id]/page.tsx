@@ -61,8 +61,8 @@ export default function EditCronPage({ params }: { params: Promise<{ id: string 
         }),
       });
       if (!res.ok) throw new Error(await res.text());
-      toast.success("Cron saved");
-      router.push("/crons");
+      toast.success("Schedule saved");
+      router.push("/schedules");
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Failed to save";
       setError(msg);
@@ -75,8 +75,8 @@ export default function EditCronPage({ params }: { params: Promise<{ id: string 
   async function handleDelete() {
     try {
       await fetch(`/api/crons/${id}`, { method: "DELETE" });
-      toast.success("Cron deleted");
-      router.push("/crons");
+      toast.success("Schedule deleted");
+      router.push("/schedules");
     } catch { /* ignore */ }
   }
 
@@ -89,13 +89,13 @@ export default function EditCronPage({ params }: { params: Promise<{ id: string 
     <div className="flex-1 overflow-y-auto">
       <form onSubmit={handleSave} className="py-6 px-6 space-y-6">
         <PageHeader
-          title={cron.name || `Cron #${cron.id}`}
-          breadcrumbs={[{ label: "Crons", href: "/crons" }, { label: cron.name || `#${cron.id}` }]}
+          title={cron.name || `Schedule #${cron.id}`}
+          breadcrumbs={[{ label: "Schedules", href: "/schedules" }, { label: cron.name || `#${cron.id}` }]}
         />
 
         <Card>
           <CardHeader>
-            <CardTitle>Cron Job</CardTitle>
+            <CardTitle>Schedule</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-1.5">
@@ -129,7 +129,7 @@ export default function EditCronPage({ params }: { params: Promise<{ id: string 
               </AlertDialogTrigger>
               <AlertDialogContent>
                 <AlertDialogHeader>
-                  <AlertDialogTitle>Delete cron job?</AlertDialogTitle>
+                  <AlertDialogTitle>Delete schedule?</AlertDialogTitle>
                   <AlertDialogDescription>
                     This will permanently delete &quot;{cron.name || `#${cron.id}`}&quot;. This action cannot be undone.
                   </AlertDialogDescription>
@@ -144,7 +144,7 @@ export default function EditCronPage({ params }: { params: Promise<{ id: string 
             </AlertDialog>
 
             <div className="flex items-center gap-3">
-              <Link href="/crons" className={cn(buttonVariants({ variant: "outline", size: "sm" }), "text-xs")}>
+              <Link href="/schedules" className={cn(buttonVariants({ variant: "outline", size: "sm" }), "text-xs")}>
                 Cancel
               </Link>
               <Button type="submit" size="sm" disabled={saving || !message.trim() || !cronExpr.trim()} className="text-xs">

@@ -4,14 +4,14 @@ A self-hosted platform for creating and managing personal AI agents. Each agent 
 
 Built on [Mastra](https://mastra.ai) + [Vercel AI SDK](https://ai-sdk.dev). Uses [OpenRouter](https://openrouter.ai) for access to 300+ LLM models.
 
-![Welcome](screenshots/onboarding.png)
+![Welcome](screenshots/welcome.png)
 
 ## Features
 
 - **Multi-agent platform** — Run multiple agents, each with their own Telegram bot, persona, and toolset
 - **Guided onboarding** — 6-step wizard walks you through API keys, model tiers, Telegram setup, voice transcription, and your first agent
 - **AI-generated personas** — Describe what your agent should do; the system generates a persona with identity, boundaries, and domain expertise
-- **Web UI** — Next.js control plane for managing agents, settings, crons, and activity feeds
+- **Web UI** — Next.js control plane for managing agents, settings, schedules, and activity feeds
 - **Working memory** — Persistent scratchpad per agent that remembers preferences, facts, and context across conversations
 - **Skills & MCP** — Extend agents with markdown skill modules or Model Context Protocol servers
 - **Phoenix observability** — OpenTelemetry tracing for debugging agent behavior
@@ -58,7 +58,7 @@ Built on [Mastra](https://mastra.ai) + [Vercel AI SDK](https://ai-sdk.dev). Uses
 
 </details>
 
-![Agent Creation](screenshots/new-agent.png)
+![Dashboard](screenshots/dashboard.png)
 
 ## Quick Start
 

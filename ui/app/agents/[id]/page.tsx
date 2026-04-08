@@ -88,7 +88,7 @@ const NAV_GROUPS: { label: string; items: { id: TabId; label: string }[] }[] = [
     items: [
       { id: "tools", label: "Tools / MCP / Skills" },
       { id: "subagents", label: "Sub-agents" },
-      { id: "crons", label: "Crons" },
+      { id: "crons", label: "Schedules" },
     ],
   },
   {
@@ -1952,17 +1952,17 @@ export default function AgentEditPage({ params }: { params: Promise<{ id: string
               />
             )}
 
-            {/* ---- Crons ---- */}
+            {/* ---- Schedules ---- */}
             {tab === "crons" && (
               <Card size="sm">
                 <CardHeader className="border-b">
                   <div className="flex items-center gap-2">
-                    <CardTitle className="text-xs">Cron Jobs</CardTitle>
-                    <span className="text-[10px] text-muted-foreground">({crons.length} jobs)</span>
+                    <CardTitle className="text-xs">Schedules</CardTitle>
+                    <span className="text-[10px] text-muted-foreground">({crons.length} total)</span>
                   </div>
                 </CardHeader>
                 <CardContent className="space-y-1">
-                  {crons.length === 0 && <p className="text-[10px] text-muted-foreground">No cron jobs for this agent.</p>}
+                  {crons.length === 0 && <p className="text-[10px] text-muted-foreground">No schedules for this agent.</p>}
                   {crons.map(cron => (
                     <div key={cron.id} className="flex items-center gap-3 py-1.5 border-b border-border/50 last:border-0">
                       <span className={`w-1.5 h-1.5 rounded-full ${cron.paused ? "bg-muted-foreground" : "bg-[var(--status-success)]"}`} />
@@ -1974,12 +1974,12 @@ export default function AgentEditPage({ params }: { params: Promise<{ id: string
                     </div>
                   ))}
                   <div className="flex items-center gap-2 mt-2">
-                    <Link href={`/crons/new?agent_id=${id}`} className="text-[10px] text-muted-foreground hover:text-foreground underline">
-                      + Add cron for this agent
+                    <Link href={`/schedules/new?agent_id=${id}`} className="text-[10px] text-muted-foreground hover:text-foreground underline">
+                      + Add schedule for this agent
                     </Link>
                     <span className="text-[10px] text-muted-foreground">|</span>
-                    <Link href="/crons" className="text-[10px] text-muted-foreground hover:text-foreground">
-                      All crons
+                    <Link href="/schedules" className="text-[10px] text-muted-foreground hover:text-foreground">
+                      All schedules
                     </Link>
                   </div>
                 </CardContent>

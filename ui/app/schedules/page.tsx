@@ -139,7 +139,7 @@ function LoadingSkeleton() {
   );
 }
 
-export default function CronsPage() {
+export default function SchedulesPage() {
   const [agentFilter, setAgentFilter] = useState("all");
   const agentParam = agentFilter === "all" ? "" : `?agent_id=${agentFilter}`;
   const { data, loading, refetch } = useFetch<{ crons: CronJob[] }>(
@@ -233,8 +233,8 @@ export default function CronsPage() {
   return (
     <div className="p-6">
       <PageHeader
-        title="Crons"
-        description="Scheduled recurring tasks"
+        title="Schedules"
+        description="One-time and recurring scheduled actions"
         actions={
           <div className="flex items-center gap-2">
             <select
@@ -257,9 +257,9 @@ export default function CronsPage() {
                 {tasks.length} total
               </Badge>
             )}
-            <Link href="/crons/new" className={cn(buttonVariants({ size: "sm" }), "gap-1.5")}>
+            <Link href="/schedules/new" className={cn(buttonVariants({ size: "sm" }), "gap-1.5")}>
               <PlusCircle className="h-4 w-4" />
-              New Cron
+              New Schedule
             </Link>
           </div>
         }
@@ -270,9 +270,9 @@ export default function CronsPage() {
       {data && tasks.length === 0 && (
         <EmptyState
           icon={Clock}
-          title="No scheduled tasks"
-          description="Schedule recurring prompts for your agents"
-          action={{ label: "Create your first cron", href: "/crons/new" }}
+          title="No schedules"
+          description="Schedule recurring or one-time actions for your agents"
+          action={{ label: "Create your first schedule", href: "/schedules/new" }}
         />
       )}
 
@@ -283,7 +283,7 @@ export default function CronsPage() {
             <Card className="rounded-xl border border-border/60 bg-card/70" size="sm">
               <CardHeader>
                 <div className="flex items-center justify-between">
-                  <CardDescription className="text-xs">Active Crons</CardDescription>
+                  <CardDescription className="text-xs">Active Schedules</CardDescription>
                   <Zap className="h-3.5 w-3.5 text-muted-foreground" />
                 </div>
                 <CardTitle className="text-2xl">{activeCount}</CardTitle>
@@ -346,7 +346,7 @@ export default function CronsPage() {
                     >
                       <td className="px-4 py-2.5">
                         <Link
-                          href={`/crons/${task.id}`}
+                          href={`/schedules/${task.id}`}
                           className={`hover:underline underline-offset-2 ${isPaused ? "text-muted-foreground" : "text-foreground"}`}
                         >
                           {displayName(task)}
@@ -412,7 +412,7 @@ export default function CronsPage() {
                           <DropdownMenuContent align="end" side="bottom">
                             <DropdownMenuItem
                               onClick={() =>
-                                (window.location.href = `/crons/${task.id}`)
+                                (window.location.href = `/schedules/${task.id}`)
                               }
                             >
                               <Edit className="h-4 w-4" />
@@ -463,7 +463,7 @@ export default function CronsPage() {
       >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete cron</AlertDialogTitle>
+            <AlertDialogTitle>Delete schedule</AlertDialogTitle>
             <AlertDialogDescription>
               Are you sure you want to delete &ldquo;
               {deleteTarget ? displayName(deleteTarget) : ""}
