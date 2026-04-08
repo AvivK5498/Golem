@@ -64,6 +64,7 @@ Built on [Mastra](https://mastra.ai) + [Vercel AI SDK](https://ai-sdk.dev). Uses
 
 ### Prerequisites
 
+- macOS or Linux (Windows is not supported yet)
 - Node.js 20+
 - An [OpenRouter](https://openrouter.ai/keys) API key
 - A Telegram bot token (from [@BotFather](https://t.me/BotFather))
