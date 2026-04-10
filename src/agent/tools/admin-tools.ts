@@ -79,9 +79,17 @@ export const storeSecretTool = createTool({
     "The value is immediately available via process.env without a restart. " +
     "If the key already exists, set overwrite: true to replace it.",
   inputSchema: z.object({
-    key: z.string().regex(/^[A-Z][A-Z0-9_]*$/, "Key must be UPPER_SNAKE_CASE (e.g. RUNPOD_API_KEY)"),
-    value: z.string().min(1, "Value cannot be empty"),
-    overwrite: z.boolean().optional().default(false).describe("Set true to replace an existing key"),
+    key: z.string().regex(/^[A-Z][A-Z0-9_]*$/, "Key must be UPPER_SNAKE_CASE (e.g. RUNPOD_API_KEY)").describe(
+      "Environment variable name in UPPER_SNAKE_CASE. Examples: 'RUNPOD_API_KEY', 'TAVILY_API_KEY', 'OPENROUTER_API_KEY'. " +
+      "Must start with a letter and contain only A-Z, 0-9, and underscores."
+    ),
+    value: z.string().min(1, "Value cannot be empty").describe(
+      "The secret value as a plain string (API token, key, credential). Stored verbatim in .env. " +
+      "Do not URL-encode or quote the value — write it as it should appear to process.env."
+    ),
+    overwrite: z.boolean().optional().default(false).describe(
+      "Set true to replace an existing key. Defaults to false: if the key already exists, the call returns an error."
+    ),
   }),
   inputExamples: [
     { input: { key: "RUNPOD_API_KEY", value: "rp_xxxxxxxxxxxx" } },
