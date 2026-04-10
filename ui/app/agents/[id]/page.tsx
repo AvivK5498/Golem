@@ -1154,6 +1154,10 @@ export default function AgentEditPage({ params }: { params: Promise<{ id: string
   const [provider, setProvider] = useState("openrouter");
   const [model, setModel] = useState("");
   const [modelOverrideEnabled, setModelOverrideEnabled] = useState(false);
+  // Provider selector for the override card. Derived from the current model ID's
+  // prefix on first load, then explicitly toggled by the user. Switching providers
+  // clears the model so the user is forced to re-pick from that provider's catalog.
+  const [overrideProvider, setOverrideProvider] = useState<"openrouter" | "codex">("openrouter");
   const [temperature, setTemperature] = useState(0.2);
   const [maxSteps, setMaxSteps] = useState(50);
   const [reasoningEffort, setReasoningEffort] = useState("medium");
@@ -1169,6 +1173,14 @@ export default function AgentEditPage({ params }: { params: Promise<{ id: string
   const [wmEnabled, setWmEnabled] = useState(true);
   const [wmScope, setWmScope] = useState("resource");
   const [memoryTemplate, setMemoryTemplate] = useState("");
+  // Smart recall (window-aware lastMessages with min/max + token cap)
+  const [smartRecallEnabled, setSmartRecallEnabled] = useState(false);
+  const [smartRecallWindowDays, setSmartRecallWindowDays] = useState(3);
+  const [smartRecallMin, setSmartRecallMin] = useState(12);
+  const [smartRecallMax, setSmartRecallMax] = useState(40);
+  const [smartRecallMaxTokens, setSmartRecallMaxTokens] = useState(0);
+  // Conversation tempo awareness
+  const [tempoEnabled, setTempoEnabled] = useState(true);
 
   // -- Telegram state --
   const [botToken, setBotToken] = useState("");
@@ -1202,6 +1214,13 @@ export default function AgentEditPage({ params }: { params: Promise<{ id: string
     if (settingsData["memory.lastMessages"]) setLastMessages(Number(settingsData["memory.lastMessages"]) || 12);
     if (settingsData["memory.workingMemory.enabled"] !== undefined) setWmEnabled(settingsData["memory.workingMemory.enabled"] === "true");
     if (settingsData["memory.workingMemory.scope"]) setWmScope(settingsData["memory.workingMemory.scope"]);
+    if (settingsData["memory.smartRecall.enabled"] !== undefined) setSmartRecallEnabled(settingsData["memory.smartRecall.enabled"] === "true");
+    if (settingsData["memory.smartRecall.windowDays"]) setSmartRecallWindowDays(Number(settingsData["memory.smartRecall.windowDays"]) || 3);
+    if (settingsData["memory.smartRecall.minMessages"]) setSmartRecallMin(Number(settingsData["memory.smartRecall.minMessages"]) || 12);
+    if (settingsData["memory.smartRecall.maxMessages"]) setSmartRecallMax(Number(settingsData["memory.smartRecall.maxMessages"]) || 40);
+    if (settingsData["memory.smartRecall.maxTokens"]) setSmartRecallMaxTokens(Number(settingsData["memory.smartRecall.maxTokens"]) || 0);
+    // Tempo defaults to true when unset (matches the backend default)
+    setTempoEnabled(settingsData["memory.tempo.enabled"] === undefined ? true : settingsData["memory.tempo.enabled"] === "true");
     if (settingsData["llm.temperature"]) setTemperature(Number(settingsData["llm.temperature"]) || 0.2);
     if (settingsData["llm.maxSteps"]) setMaxSteps(Number(settingsData["llm.maxSteps"]) || 50);
     if (settingsData["llm.reasoningEffort"]) setReasoningEffort(settingsData["llm.reasoningEffort"]);
@@ -1251,6 +1270,8 @@ export default function AgentEditPage({ params }: { params: Promise<{ id: string
     const settingsModel = settingsData?.["llm.model"];
     const effectiveModel = settingsModel !== undefined ? settingsModel : (c.llm.model || "");
     setModel(effectiveModel);
+    // Derive provider for the override card from the model ID prefix
+    setOverrideProvider(effectiveModel.startsWith("codex/") ? "codex" : "openrouter");
     try {
       const gTiers = globalSettings?.["global.llm.tiers"] ? JSON.parse(globalSettings["global.llm.tiers"]) : {};
       const tierValues = Object.values(gTiers);
@@ -1322,6 +1343,12 @@ export default function AgentEditPage({ params }: { params: Promise<{ id: string
           "memory.lastMessages": lastMessages,
           "memory.workingMemory.enabled": wmEnabled,
           "memory.workingMemory.scope": wmScope,
+          "memory.smartRecall.enabled": smartRecallEnabled,
+          "memory.smartRecall.windowDays": smartRecallWindowDays,
+          "memory.smartRecall.minMessages": smartRecallMin,
+          "memory.smartRecall.maxMessages": smartRecallMax,
+          "memory.smartRecall.maxTokens": smartRecallMaxTokens,
+          "memory.tempo.enabled": tempoEnabled,
         }),
       });
       if (res.ok) {
@@ -1678,7 +1705,7 @@ export default function AgentEditPage({ params }: { params: Promise<{ id: string
                   </CardContent>
                 </Card>
 
-                {/* Model override — pick any OpenRouter model for this agent (auto-saves) */}
+                {/* Model override — pick a provider + model for this agent (auto-saves) */}
                 <Card size="sm">
                   <CardHeader className="border-b">
                     <div className="flex items-center justify-between">
@@ -1707,7 +1734,40 @@ export default function AgentEditPage({ params }: { params: Promise<{ id: string
                     </div>
                     {modelOverrideEnabled && (
                       <div className="space-y-3">
-                        <ModelCombobox value={model} onChange={(v) => { setModel(v); saveSetting("llm.model", v); }} models={models} label="Model" />
+                        {/* Provider selector — switching clears the model so the user re-picks */}
+                        <div className="flex flex-col gap-1.5">
+                          <label className={labelClass}>Provider</label>
+                          <div className="flex gap-2">
+                            {(["openrouter", "codex"] as const).map((p) => (
+                              <button
+                                key={p}
+                                type="button"
+                                onClick={() => {
+                                  if (p === overrideProvider) return;
+                                  setOverrideProvider(p);
+                                  setModel("");
+                                  saveSetting("llm.model", "");
+                                }}
+                                className={`flex-1 px-3 py-2 rounded-md text-xs border transition-colors ${
+                                  overrideProvider === p
+                                    ? "bg-muted text-foreground border-border font-medium"
+                                    : "text-muted-foreground border-transparent hover:bg-muted/50 hover:border-border/50"
+                                }`}
+                              >
+                                <div className="font-medium capitalize">{p === "codex" ? "Codex (ChatGPT)" : "OpenRouter"}</div>
+                                <div className="text-[9px] text-muted-foreground mt-0.5">
+                                  {p === "codex" ? "Subscription, free under quota" : "Pay per token"}
+                                </div>
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                        <ModelCombobox
+                          value={model}
+                          onChange={(v) => { setModel(v); saveSetting("llm.model", v); }}
+                          models={models?.filter((m) => (m.provider ?? "openrouter") === overrideProvider)}
+                          label="Model"
+                        />
                         {model && (
                           <p className="text-[11px] text-[var(--status-warning)]">
                             This agent will use <code className="font-mono">{model}</code> instead of the tier-assigned model.
@@ -1770,19 +1830,85 @@ export default function AgentEditPage({ params }: { params: Promise<{ id: string
                       <Badge variant="outline" className="text-[9px] border-border">live</Badge>
                     </div>
                   </CardHeader>
-                  <CardContent className="space-y-3">
-                    <div className="flex flex-col gap-1.5">
-                      <label className={labelClass}>Last Messages (context window)</label>
-                      <input type="number" value={lastMessages} onChange={e => setLastMessages(Number(e.target.value))} min={1} max={50} className={numberInputClass} />
+                  <CardContent className="space-y-4">
+                    {/* Static context window + working memory */}
+                    <div className="space-y-3">
+                      <div className="flex flex-col gap-1.5">
+                        <label className={labelClass}>Last Messages (context window)</label>
+                        <input type="number" value={lastMessages} onChange={e => setLastMessages(Number(e.target.value))} min={1} max={50} disabled={smartRecallEnabled} className={numberInputClass} />
+                        {smartRecallEnabled && (
+                          <p className="text-[9px] text-muted-foreground">Overridden per-turn by Smart Recall (below).</p>
+                        )}
+                      </div>
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <input type="checkbox" checked={wmEnabled} onChange={e => setWmEnabled(e.target.checked)}
+                          className="rounded border-border bg-accent accent-teal-500" />
+                        <span className="text-[10px] text-muted-foreground">Working Memory</span>
+                      </label>
                     </div>
-                    <label className="flex items-center gap-2 cursor-pointer">
-                      <input type="checkbox" checked={wmEnabled} onChange={e => setWmEnabled(e.target.checked)}
-                        className="rounded border-border bg-accent accent-teal-500" />
-                      <span className="text-[10px] text-muted-foreground">Working Memory</span>
-                    </label>
+
+                    {/* Visual separator between static cap and smart recall */}
+                    <div className="border-t border-border/60" />
+
+                    {/* Smart Recall — window-aware override */}
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between">
+                        <label className="flex items-center gap-2 cursor-pointer">
+                          <input type="checkbox" checked={smartRecallEnabled} onChange={e => setSmartRecallEnabled(e.target.checked)}
+                            className="rounded border-border bg-accent accent-teal-500" />
+                          <span className="text-[10px] font-medium text-foreground">Smart Recall</span>
+                        </label>
+                      </div>
+                      <p className="text-[10px] text-muted-foreground">
+                        Window-aware history loading. Counts messages in the last <span className="font-mono">N</span> days, clamps between Min/Max, and trims by token budget. Overrides the Last Messages cap above when enabled.
+                      </p>
+                      <div className={`grid grid-cols-2 gap-3 ${!smartRecallEnabled ? "opacity-50 pointer-events-none" : ""}`}>
+                        <div className="flex flex-col gap-1.5">
+                          <label className={labelClass}>Window (days)</label>
+                          <input type="number" value={smartRecallWindowDays} onChange={e => setSmartRecallWindowDays(Number(e.target.value))} min={1} max={365} className={numberInputClass} />
+                        </div>
+                        <div className="flex flex-col gap-1.5">
+                          <label className={labelClass}>Max tokens</label>
+                          <input type="number" value={smartRecallMaxTokens} onChange={e => setSmartRecallMaxTokens(Number(e.target.value))} min={0} max={200000} step={100} className={numberInputClass} />
+                        </div>
+                        <div className="flex flex-col gap-1.5">
+                          <label className={labelClass}>Min messages</label>
+                          <input type="number" value={smartRecallMin} onChange={e => setSmartRecallMin(Number(e.target.value))} min={0} max={500} className={numberInputClass} />
+                        </div>
+                        <div className="flex flex-col gap-1.5">
+                          <label className={labelClass}>Max messages</label>
+                          <input type="number" value={smartRecallMax} onChange={e => setSmartRecallMax(Number(e.target.value))} min={1} max={500} className={numberInputClass} />
+                        </div>
+                      </div>
+                      {smartRecallEnabled && (
+                        <p className="text-[9px] text-muted-foreground">
+                          Max tokens of <span className="font-mono">0</span> disables the token cap (only message-count limits apply).
+                        </p>
+                      )}
+                    </div>
+
                     <div className="flex justify-end pt-2">
                       <Button onClick={saveMemorySettings} disabled={saving} size="sm">{saving ? "Saving..." : "Save Memory Settings"}</Button>
                     </div>
+                  </CardContent>
+                </Card>
+
+                <Card size="sm">
+                  <CardHeader className="border-b">
+                    <div className="flex items-center justify-between">
+                      <CardTitle className="text-xs">Conversation Tempo</CardTitle>
+                      <Badge variant="outline" className="text-[9px] border-border">live</Badge>
+                    </div>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    <p className="text-[10px] text-muted-foreground">
+                      Injects a discrete tempo signal (active / recent / stale / cold) into the system prompt so the agent picks up cold conversations naturally and doesn&apos;t treat stale time references as live.
+                    </p>
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input type="checkbox" checked={tempoEnabled} onChange={e => setTempoEnabled(e.target.checked)}
+                        className="rounded border-border bg-accent accent-teal-500" />
+                      <span className="text-[10px] text-muted-foreground">Enable tempo awareness</span>
+                    </label>
                   </CardContent>
                 </Card>
 
