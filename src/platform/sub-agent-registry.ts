@@ -9,24 +9,29 @@
 import type { Agent } from "@mastra/core/agent";
 import { logger } from "../utils/external-logger.js";
 
-type LoadSubAgentsFn = (agentId: string | undefined, dynamicTools?: Record<string, unknown>, preloadedConfig?: Record<string, unknown> | null) => Record<string, Agent>;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- agentBrowser type from optional dep
+type LoadSubAgentsFn = (agentId: string | undefined, dynamicTools?: Record<string, unknown>, preloadedConfig?: Record<string, unknown> | null, agentBrowser?: any) => Record<string, Agent>;
 
 export class SubAgentRegistry {
   private agents = new Map<string, Record<string, Agent>>();
   private loader: LoadSubAgentsFn;
   private dynamicTools: Record<string, unknown>;
   private agentStore?: { getSubAgents(id: string): Record<string, unknown> | null };
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  private agentBrowser?: any;
 
-  constructor(loader: LoadSubAgentsFn, dynamicTools: Record<string, unknown> = {}, agentStore?: { getSubAgents(id: string): Record<string, unknown> | null }) {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  constructor(loader: LoadSubAgentsFn, dynamicTools: Record<string, unknown> = {}, agentStore?: { getSubAgents(id: string): Record<string, unknown> | null }, agentBrowser?: any) {
     this.loader = loader;
     this.dynamicTools = dynamicTools;
     this.agentStore = agentStore;
+    this.agentBrowser = agentBrowser;
   }
 
   /** Load sub-agents for a parent agent. Called once per agent at startup. */
   load(agentId: string): Record<string, Agent> {
     const preloaded = this.agentStore?.getSubAgents(agentId) ?? null;
-    const subAgents = this.loader(agentId, this.dynamicTools, preloaded);
+    const subAgents = this.loader(agentId, this.dynamicTools, preloaded, this.agentBrowser);
     this.agents.set(agentId, subAgents);
     const count = Object.keys(subAgents).length;
     if (count > 0) {
@@ -49,7 +54,7 @@ export class SubAgentRegistry {
     const oldCount = Object.keys(this.agents.get(agentId) ?? {}).length;
     try {
       const preloaded = this.agentStore?.getSubAgents(agentId) ?? null;
-      const subAgents = this.loader(agentId, this.dynamicTools, preloaded);
+      const subAgents = this.loader(agentId, this.dynamicTools, preloaded, this.agentBrowser);
       this.agents.set(agentId, subAgents);
       const newCount = Object.keys(subAgents).length;
       console.log(`[sub-agent-registry] rebuilt "${agentId}": ${oldCount} → ${newCount} sub-agents`);

@@ -63,6 +63,7 @@ import { ReasoningStripperProcessor } from "../agent/processors/reasoning-stripp
 import { ToolErrorGate } from "../agent/processors/tool-error-gate.js";
 import { AsyncJobGuard } from "../agent/processors/async-job-guard.js";
 import { MessageTimestampProcessor } from "../agent/processors/message-timestamp-processor.js";
+import { AgentBrowser } from "@mastra/agent-browser";
 import { setAllowedBinaries } from "../agent/tools/run-command-tool.js";
 import fs from "node:fs";
 import path from "node:path";
@@ -293,8 +294,9 @@ function createPlatformAgent(params: {
   transports: TransportManager;
   mcpToolFilters: Map<string, Set<string>>;
   agentSettings: AgentSettings;
+  agentBrowser?: AgentBrowser;
 }): Agent {
-  const { config, memory, subAgentRegistry, tools, registry, transports, mcpToolFilters, agentSettings } = params;
+  const { config, memory, subAgentRegistry, tools, registry, transports, mcpToolFilters, agentSettings, agentBrowser } = params;
 
   // Tools every platform agent gets regardless of config
   const hasSubAgents = Object.keys(subAgentRegistry.get(config.id)).length > 0;
@@ -493,6 +495,13 @@ For single sub-agent tasks, skip the handoff file.`;
       bm25: hasSkills,
     });
     if (hasSkills) agentOptions.skillsFormat = "markdown";
+  }
+
+  // Browser: opt-in per-agent, shared AgentBrowser instance
+  const browserEnabled = agentSettings.getBrowserEnabled(config.id) ?? false;
+  if (browserEnabled && agentBrowser) {
+    agentOptions.browser = agentBrowser;
+    console.log(`[platform] agent "${config.id}" gets browser tools`);
   }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- dynamic agent config construction
@@ -946,7 +955,13 @@ export async function startPlatform(): Promise<PlatformContext> {
 
   // 7. For each agent: create memory, sub-agents, agent instance, runner, register handler
   const runners = new Map<string, AgentRunner>();
-  const subAgentRegistry = new SubAgentRegistry(loadSubAgents, getMCPTools(), agentStore);
+
+  // Shared browser instance — lazy, only created if any agent has browser enabled
+  const anyBrowserEnabled = agentConfigs.some(c => agentSettings.getBrowserEnabled(c.id));
+  const agentBrowser = anyBrowserEnabled ? new AgentBrowser({ headless: true }) : undefined;
+  if (agentBrowser) console.log("[platform] browser automation enabled (headless)");
+
+  const subAgentRegistry = new SubAgentRegistry(loadSubAgents, getMCPTools(), agentStore, agentBrowser);
 
   for (const config of agentConfigs) {
     console.log(`[platform] initializing agent "${config.id}"...`);
@@ -965,6 +980,7 @@ export async function startPlatform(): Promise<PlatformContext> {
       transports,
       mcpToolFilters,
       agentSettings,
+      agentBrowser,
     });
 
     registry.registerInstance(config.id, agent);

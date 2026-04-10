@@ -2297,6 +2297,32 @@ export default function AgentEditPage({ params }: { params: Promise<{ id: string
 
                     <Separator />
 
+                    {/* Browser */}
+                    <Card size="sm">
+                      <CardHeader className="border-b">
+                        <div className="flex items-center gap-2">
+                          <CardTitle className="text-xs">Browser</CardTitle>
+                          <Badge variant="outline" className="text-[9px] border-border">restart</Badge>
+                        </div>
+                      </CardHeader>
+                      <CardContent className="space-y-2">
+                        <label className="flex items-center gap-2 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={settingsData["browser.enabled"] === "true"}
+                            onChange={e => saveSetting("browser.enabled", e.target.checked)}
+                            className="rounded border-border bg-accent accent-teal-500"
+                          />
+                          <span className="text-[10px] text-muted-foreground">Enable browser automation</span>
+                        </label>
+                        <p className="text-[10px] text-muted-foreground/60">
+                          Adds 16 browser tools for web navigation, form filling, and data extraction. Runs headless Chrome.
+                        </p>
+                      </CardContent>
+                    </Card>
+
+                    <Separator />
+
                     {/* Access Control */}
                     <Card size="sm">
                       <CardHeader className="border-b">

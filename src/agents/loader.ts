@@ -223,6 +223,8 @@ export function loadSubAgents(
   agentId: string | undefined,
   dynamicTools: Record<string, unknown> = {},
   preloadedConfig?: Record<string, unknown> | null,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- AgentBrowser type from optional dep
+  agentBrowser?: any,
 ): Record<string, Agent> {
   let config: AgentsYaml;
 
@@ -368,6 +370,11 @@ export function loadSubAgents(
         bm25: hasSkills,
       });
       if (hasSkills) agentOptions.skillsFormat = "markdown";
+    }
+
+    // Browser: opt-in via "browser" in tools list
+    if (configuredTools.includes("browser") && agentBrowser) {
+      agentOptions.browser = agentBrowser;
     }
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
