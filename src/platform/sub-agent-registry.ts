@@ -27,6 +27,7 @@ export class SubAgentRegistry {
   load(agentId: string): Record<string, Agent> {
     const preloaded = this.agentStore?.getSubAgents(agentId) ?? null;
     const subAgents = this.loader(agentId, this.dynamicTools, preloaded);
+    this.agents.set(agentId, subAgents);
     const count = Object.keys(subAgents).length;
     if (count > 0) {
       logger.info(`Sub-agent registry loaded ${count} sub-agents for "${agentId}"`, { agent: agentId, count: String(count) });
