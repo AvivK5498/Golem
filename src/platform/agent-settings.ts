@@ -60,9 +60,6 @@ export const SETTINGS_KEYS = {
   ALLOWED_GROUPS: "allowedGroups",
   ADMIN_GROUPS: "adminGroups",
 
-  // Browser
-  BROWSER_ENABLED: "browser.enabled",
-
   // Tools & skills
   TOOLS: "tools",
   SKILLS: "skills",
@@ -221,10 +218,6 @@ export class AgentSettings {
 
   getSemanticRecall(agentId: string): boolean | null {
     return this.getBool(agentId, SETTINGS_KEYS.MEMORY_SEMANTIC_RECALL);
-  }
-
-  getBrowserEnabled(agentId: string): boolean | null {
-    return this.getBool(agentId, SETTINGS_KEYS.BROWSER_ENABLED);
   }
 
   getObservationalEnabled(agentId: string): boolean | null {
