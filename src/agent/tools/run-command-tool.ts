@@ -122,7 +122,10 @@ export const runCommandTool = createTool({
   description: "Run a CLI binary on the host machine. Read-only tools (grep, cat, ls, wc, sort, head, tail) are always available.",
   inputSchema: z.object({
     command: z.string().describe("The shell command to execute."),
-    timeout: z.number().optional().default(30000),
+    timeout: z.number().optional().default(30000).describe(
+      "Maximum execution time in milliseconds. Defaults to 30000 (30 seconds). " +
+      "Increase for long-running commands like builds, downloads, or large queries."
+    ),
     env: z.record(z.string(), z.string()).optional()
       .describe("Extra environment variables as {KEY: VALUE} object"),
   }),

@@ -54,15 +54,28 @@ export const cronTool = createTool({
     "Set once=true for one-shot cron jobs that auto-delete after firing. Delay jobs are always one-shot. " +
     `Current crons: ${CRON_SUMMARY}`,
   inputSchema: z.object({
-    action: z.enum(["list", "add", "remove", "pause", "resume", "run"]),
-    name: z.string().optional().describe("Human-readable job name"),
+    action: z.enum(["list", "add", "remove", "pause", "resume", "run"]).describe(
+      "Operation to perform: " +
+      "'list' returns all crons, " +
+      "'add' creates a new cron (requires schedule + message), " +
+      "'remove' deletes by id, " +
+      "'pause'/'resume' toggles a cron by id, " +
+      "'run' fires a cron immediately by id without changing its schedule."
+    ),
+    name: z.string().optional().describe("Human-readable job name. Required for 'add'."),
     schedule: z.object({
-      kind: z.enum(["every", "cron", "delay"]),
+      kind: z.enum(["every", "cron", "delay"]).describe(
+        "Schedule type: " +
+        "'delay' = fire ONCE after a duration (use for 'remind me in X' requests), " +
+        "'every' = recurring at a fixed interval, " +
+        "'cron' = recurring on a cron expression. " +
+        "For one-time reminders always pick 'delay'."
+      ),
       value: z.string().describe("Interval (15m/30m/1h/2h/6h/1d), cron expression (0 9 * * 1-5), or delay (2m/30m/1h/3h)"),
-    }).optional(),
-    message: z.string().optional().describe("Agent prompt to execute on each run"),
-    id: z.number().optional().describe("Cron ID for remove/pause/resume actions"),
-    once: z.boolean().optional().describe("If true, delete the job after it fires once (for reminders)"),
+    }).optional().describe("Schedule definition. Required for 'add', ignored for other actions."),
+    message: z.string().optional().describe("Agent prompt to execute on each run. Required for 'add'."),
+    id: z.number().optional().describe("Cron ID for remove/pause/resume/run actions. Required for those actions, ignored for list/add."),
+    once: z.boolean().optional().describe("If true, delete the job after it fires once (for reminders). Defaults to false. Delay-kind jobs are always one-shot regardless."),
   }),
   inputExamples: [
     { input: { action: "add", name: "check PR status", schedule: { kind: "every", value: "2h" }, message: "Check open PRs on project repo and summarize status" } },

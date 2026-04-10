@@ -9,6 +9,7 @@ import {
   Clock,
   Github,
   LayoutDashboard,
+  Plug,
   Puzzle,
   Settings,
 } from "lucide-react";
@@ -31,6 +32,7 @@ const SECTIONS: NavSection[] = [
     items: [
       { href: "/agents", label: "Agents", icon: Bot },
       { href: "/skills", label: "Skills", icon: Puzzle },
+      { href: "/providers", label: "Providers", icon: Plug },
     ],
   },
   {

@@ -17,7 +17,12 @@ import {
   ArrowRight,
   ArrowLeft,
   Bot,
+  Check,
+  Copy,
+  CreditCard,
+  Globe,
   Key,
+  Loader2,
   MessageSquare,
   Moon,
   Plug,
@@ -29,13 +34,26 @@ import {
 } from "lucide-react";
 import type { OpenRouterModel } from "@/lib/types";
 
-const TOTAL_STEPS = 7;
+type ProviderSet = Set<"openrouter" | "codex">;
 
-const DEFAULT_TIERS = {
+const OPENROUTER_DEFAULT_TIERS = {
   low: "google/gemini-3-flash-preview",
   med: "openai/gpt-5.4",
   high: "anthropic/claude-opus-4-6",
 };
+
+const CODEX_DEFAULT_TIERS = {
+  low: "codex/gpt-5.4-mini",
+  med: "codex/gpt-5.4",
+  high: "codex/gpt-5.4",
+};
+
+const DEFAULT_TIERS = OPENROUTER_DEFAULT_TIERS;
+
+function getDefaultTiers(providers: ProviderSet) {
+  if (providers.has("openrouter")) return OPENROUTER_DEFAULT_TIERS;
+  return CODEX_DEFAULT_TIERS;
+}
 
 const TIER_DESCRIPTIONS = {
   low: "Fast & affordable — everyday chat, simple tasks",
@@ -47,6 +65,9 @@ const TIER_DESCRIPTIONS = {
 
 function StepWelcome({ onNext }: { onNext: () => void }) {
   const { theme, setTheme } = useTheme();
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+
   return (
     <div className="flex flex-col items-center justify-center min-h-[400px] text-center space-y-6">
       <div className="space-y-2">
@@ -68,7 +89,7 @@ function StepWelcome({ onNext }: { onNext: () => void }) {
           type="button"
           onClick={() => setTheme("light")}
           className={`flex items-center gap-1 rounded-md px-2 py-1 transition-colors ${
-            theme === "light"
+            mounted && theme === "light"
               ? "bg-accent text-foreground"
               : "hover:text-foreground"
           }`}
@@ -80,7 +101,7 @@ function StepWelcome({ onNext }: { onNext: () => void }) {
           type="button"
           onClick={() => setTheme("dark")}
           className={`flex items-center gap-1 rounded-md px-2 py-1 transition-colors ${
-            theme === "dark"
+            mounted && theme === "dark"
               ? "bg-accent text-foreground"
               : "hover:text-foreground"
           }`}
@@ -88,6 +109,242 @@ function StepWelcome({ onNext }: { onNext: () => void }) {
           <Moon size={12} />
           Dark
         </button>
+      </div>
+    </div>
+  );
+}
+
+function StepProviders({
+  selectedProviders,
+  setSelectedProviders,
+  onNext,
+  onBack,
+}: {
+  selectedProviders: ProviderSet;
+  setSelectedProviders: (v: ProviderSet) => void;
+  onNext: () => void;
+  onBack: () => void;
+}) {
+  function toggle(id: "openrouter" | "codex") {
+    const next = new Set(selectedProviders);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    setSelectedProviders(next);
+  }
+
+  const providers = [
+    {
+      id: "openrouter" as const,
+      name: "OpenRouter",
+      description: "Pay-per-token. 100+ models including Claude, GPT, Gemini, and Mistral.",
+      badge: "API Key",
+      icon: <Globe size={18} />,
+    },
+    {
+      id: "codex" as const,
+      name: "Codex (ChatGPT)",
+      description: "Use your ChatGPT Plus or Pro subscription. No per-token cost under fair-use quota.",
+      badge: "OAuth",
+      icon: <CreditCard size={18} />,
+    },
+  ];
+
+  return (
+    <div className="space-y-6">
+      <div className="space-y-2">
+        <h2 className="text-xl font-semibold">Choose your model providers</h2>
+        <p className="text-sm text-muted-foreground">
+          Select which LLM providers to use. You can add more later in Settings.
+        </p>
+      </div>
+
+      <div className="space-y-3">
+        {providers.map((p) => {
+          const checked = selectedProviders.has(p.id);
+          return (
+            <Card
+              key={p.id}
+              className={`cursor-pointer transition-colors ${checked ? "border-[var(--brand)] bg-[var(--brand-muted)]/30" : "hover:border-foreground/20"}`}
+              onClick={() => toggle(p.id)}
+            >
+              <CardContent className="p-4 flex items-start gap-3">
+                <div className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded border ${checked ? "border-[var(--brand)] bg-[var(--brand)] text-black" : "border-border bg-muted"}`}>
+                  {checked && <Check size={10} strokeWidth={3} />}
+                </div>
+                <div className="flex-1 space-y-1">
+                  <div className="flex items-center gap-2">
+                    {p.icon}
+                    <span className="text-sm font-medium">{p.name}</span>
+                    <Badge variant="secondary" className="text-[10px]">{p.badge}</Badge>
+                  </div>
+                  <p className="text-xs text-muted-foreground">{p.description}</p>
+                </div>
+              </CardContent>
+            </Card>
+          );
+        })}
+      </div>
+
+      {selectedProviders.size === 0 && (
+        <p className="text-xs text-destructive">Select at least one provider to continue.</p>
+      )}
+
+      <div className="flex items-center justify-between pt-4">
+        <Button variant="outline" onClick={onBack} className="gap-1">
+          <ArrowLeft size={14} /> Back
+        </Button>
+        <Button onClick={onNext} disabled={selectedProviders.size === 0} className="gap-1">
+          Next <ArrowRight size={14} />
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+function StepCodex({
+  onNext,
+  onBack,
+  onSkip,
+}: {
+  onNext: () => void;
+  onBack: () => void;
+  onSkip: () => void;
+}) {
+  const [starting, setStarting] = useState(false);
+  const [configured, setConfigured] = useState(false);
+  const [accountInfo, setAccountInfo] = useState<{ email?: string; plan?: string } | null>(null);
+  const [authUrl, setAuthUrl] = useState("");
+  const [error, setError] = useState("");
+
+  async function startLogin() {
+    setStarting(true);
+    setError("");
+    // Open a blank tab synchronously (user-initiated click) so the browser
+    // doesn't block it as a popup. We'll navigate it once we have the URL.
+    const tab = window.open("about:blank", "_blank");
+    try {
+      const res = await fetch("/api/codex/login", { method: "POST" });
+      if (!res.ok) {
+        const data = await res.json();
+        setError(data.error || "Failed to start login");
+        setStarting(false);
+        tab?.close();
+        return;
+      }
+      const { url } = await res.json();
+      if (url) {
+        setAuthUrl(url);
+        if (tab) {
+          tab.location.href = url;
+        } else {
+          window.open(url, "_blank");
+        }
+      }
+    } catch {
+      setError("Failed to reach the server");
+      setStarting(false);
+      tab?.close();
+    }
+  }
+
+  async function checkStatus() {
+    try {
+      const res = await fetch("/api/providers");
+      if (res.ok) {
+        const data = await res.json();
+        const codex = data.providers?.find((p: { id: string }) => p.id === "codex");
+        if (codex?.configured) {
+          setConfigured(true);
+          setStarting(false);
+          setAccountInfo({ email: codex.email, plan: codex.plan });
+        }
+      }
+    } catch { /* network error */ }
+  }
+
+  // Auto-poll every 3s while waiting for auth
+  useEffect(() => {
+    checkStatus();
+    const interval = setInterval(checkStatus, 3000);
+    return () => clearInterval(interval);
+  }, []);
+
+  return (
+    <div className="space-y-6">
+      <div className="space-y-2">
+        <h2 className="text-xl font-semibold">Connect Codex (ChatGPT)</h2>
+        <p className="text-sm text-muted-foreground">
+          Sign in with your ChatGPT account to use your Plus or Pro subscription models.
+        </p>
+      </div>
+
+      <Card>
+        <CardContent className="p-5 space-y-4">
+          {configured ? (
+            <div className="flex items-center gap-2 text-sm text-[var(--brand-text)]">
+              <CheckCircle2 size={16} />
+              <span>
+                Connected{accountInfo?.email ? ` as ${accountInfo.email}` : ""}
+                {accountInfo?.plan ? ` (${accountInfo.plan})` : ""}
+              </span>
+            </div>
+          ) : (
+            <>
+              <Button
+                onClick={startLogin}
+                disabled={starting}
+                size="lg"
+                className="w-full gap-2"
+              >
+                {starting ? (
+                  <>
+                    <Loader2 size={16} className="animate-spin" />
+                    Waiting for sign-in...
+                  </>
+                ) : (
+                  <>
+                    <ExternalLink size={16} />
+                    Sign in with ChatGPT
+                  </>
+                )}
+              </Button>
+              {starting && (
+                <div className="space-y-2 text-center">
+                  <p className="text-xs text-muted-foreground">
+                    A browser tab should have opened. Complete the sign-in there and come back here.
+                  </p>
+                  {authUrl && (
+                    <a
+                      href={authUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 text-xs text-[var(--brand-text)] hover:underline"
+                    >
+                      Tab didn't open? Click here <ExternalLink size={10} />
+                    </a>
+                  )}
+                </div>
+              )}
+              {error && <p className="text-xs text-destructive">{error}</p>}
+            </>
+          )}
+        </CardContent>
+      </Card>
+
+      <div className="flex items-center justify-between pt-4">
+        <Button variant="outline" onClick={onBack} className="gap-1">
+          <ArrowLeft size={14} /> Back
+        </Button>
+        <div className="flex items-center gap-2">
+          {!configured && (
+            <button onClick={onSkip} className="text-xs text-muted-foreground hover:text-foreground transition-colors">
+              Skip for now
+            </button>
+          )}
+          <Button onClick={onNext} disabled={!configured} className="gap-1">
+            Next <ArrowRight size={14} />
+          </Button>
+        </div>
       </div>
     </div>
   );
@@ -160,16 +417,20 @@ function StepApiKey({
 function StepTiers({
   tiers,
   setTiers,
+  selectedProviders,
   onNext,
   onBack,
 }: {
   tiers: { low: string; med: string; high: string };
   setTiers: (v: { low: string; med: string; high: string }) => void;
+  selectedProviders: ProviderSet;
   onNext: () => void;
   onBack: () => void;
 }) {
   const { data: modelsData } = useFetch<{ models: OpenRouterModel[] }>("/api/models");
-  const models = modelsData?.models || [];
+  const models = (modelsData?.models || []).filter(m =>
+    selectedProviders.has((m.provider ?? "openrouter") as "openrouter" | "codex")
+  );
 
   return (
     <div className="space-y-6">
@@ -713,50 +974,92 @@ function StepDone({ agentName }: { agentName: string }) {
 
 // ── Step indicator ────────────────────────────────────
 
-function StepIndicator({ current, total }: { current: number; total: number }) {
+function StepIndicator({ current, total, labels }: { current: number; total: number; labels: string[] }) {
   if (current === 0) return null; // no indicator on welcome
-  const labels = ["LLM Key", "Tiers", "Telegram", "Voice", "Agent", "Capabilities", "Done"];
+  const currentLabel = labels[current - 1] || "";
   return (
     <div className="space-y-3">
-      <Progress value={(current / total) * 100} className="h-1" />
-      <div className="flex items-center justify-between">
-        {labels.map((label, i) => {
-          const stepNum = i + 1;
-          const isActive = current === stepNum;
-          const isComplete = current > stepNum;
-          return (
-            <div key={label} className={`flex items-center gap-1.5 text-xs ${isActive ? "text-[var(--brand-text)] font-medium" : isComplete ? "text-muted-foreground" : "text-muted-foreground/40"}`}>
-              <span className={`flex h-5 w-5 items-center justify-center rounded-full text-[10px] ${isActive ? "bg-[var(--brand)] text-[var(--primary-foreground)]" : isComplete ? "bg-[var(--brand-muted)] text-[var(--brand-text)]" : "bg-muted text-muted-foreground/40"}`}>
-                {isComplete ? "✓" : stepNum}
-              </span>
-              <span className="hidden sm:inline">{label}</span>
-            </div>
-          );
-        })}
+      <div className="flex items-center justify-between text-xs">
+        <span className="text-[var(--brand-text)] font-medium">{currentLabel}</span>
+        <span className="text-muted-foreground">{current} of {total}</span>
       </div>
+      <Progress value={(current / total) * 100} className="h-1" />
     </div>
   );
 }
 
 // ── Main Onboarding Page ──────────────────────────────
 
+// ── Step definitions for conditional navigation ─────
+
+// Logical step IDs (stable in code, some skipped at runtime)
+const STEP_WELCOME = 0;
+const STEP_PROVIDERS = 1;
+const STEP_API_KEY = 2;   // only if openrouter selected
+const STEP_CODEX = 3;     // only if codex selected
+const STEP_TIERS = 4;
+const STEP_TELEGRAM = 5;
+const STEP_VOICE = 6;
+const STEP_AGENT = 7;
+const STEP_CAPABILITIES = 8;
+const STEP_DONE = 9;
+
+function getActiveSteps(providers: ProviderSet): number[] {
+  const steps = [STEP_WELCOME, STEP_PROVIDERS];
+  if (providers.has("openrouter")) steps.push(STEP_API_KEY);
+  if (providers.has("codex")) steps.push(STEP_CODEX);
+  steps.push(STEP_TIERS, STEP_TELEGRAM, STEP_VOICE, STEP_AGENT, STEP_CAPABILITIES, STEP_DONE);
+  return steps;
+}
+
+function getStepLabels(providers: ProviderSet): string[] {
+  const labels: string[] = ["Providers"];
+  if (providers.has("openrouter")) labels.push("API Key");
+  if (providers.has("codex")) labels.push("Codex");
+  labels.push("Tiers", "Telegram", "Voice", "Agent", "Capabilities", "Done");
+  return labels;
+}
+
+function nextStep(current: number, providers: ProviderSet): number {
+  const active = getActiveSteps(providers);
+  const idx = active.indexOf(current);
+  return idx >= 0 && idx < active.length - 1 ? active[idx + 1] : current;
+}
+
+function prevStep(current: number, providers: ProviderSet): number {
+  const active = getActiveSteps(providers);
+  const idx = active.indexOf(current);
+  return idx > 0 ? active[idx - 1] : current;
+}
+
+function stepToIndicatorIndex(current: number, providers: ProviderSet): number {
+  const active = getActiveSteps(providers);
+  const idx = active.indexOf(current);
+  // Step 0 (welcome) maps to 0, step 1 (providers) maps to 1, etc.
+  return Math.max(0, idx);
+}
+
 export default function OnboardingPage() {
   const [step, setStep] = useState(0);
 
-  // Step 1: API Key
+  // Providers
+  const [selectedProviders, setSelectedProviders] = useState<ProviderSet>(new Set(["openrouter"]));
+
+  // API Key
   const [apiKey, setApiKey] = useState("");
 
-  // Step 2: Tiers
+  // Tiers
   const [tiers, setTiers] = useState(DEFAULT_TIERS);
+  const [tiersEdited, setTiersEdited] = useState(false);
 
-  // Step 3: Telegram
+  // Telegram
   const [botToken, setBotToken] = useState("");
   const [ownerId, setOwnerId] = useState("");
 
-  // Step 4: Voice
+  // Voice
   const [groqApiKey, setGroqApiKey] = useState("");
 
-  // Step 5: Agent
+  // Agent
   const [agentName, setAgentName] = useState("");
   const [agentDescription, setAgentDescription] = useState("");
   const [agentTier, setAgentTier] = useState("low");
@@ -766,9 +1069,30 @@ export default function OnboardingPage() {
   );
   const [selectedSkills, setSelectedSkills] = useState<string[]>([]);
 
-  // Step 5: Done
+  // Done
   const [submitting, setSubmitting] = useState(false);
-  const [setupComplete, setSetupComplete] = useState(false);
+
+  // Reset tier defaults when providers change (only if user hasn't manually edited)
+  useEffect(() => {
+    if (!tiersEdited) {
+      setTiers(getDefaultTiers(selectedProviders));
+    }
+  }, [selectedProviders, tiersEdited]);
+
+  const labels = getStepLabels(selectedProviders);
+  const totalSteps = labels.length;
+  const indicatorIndex = stepToIndicatorIndex(step, selectedProviders);
+
+  const goNext = () => setStep(nextStep(step, selectedProviders));
+  const goBack = () => setStep(prevStep(step, selectedProviders));
+
+  function handleCodexSkip() {
+    const next = new Set(selectedProviders);
+    next.delete("codex");
+    setSelectedProviders(next);
+    // Jump past the codex step to tiers
+    setStep(STEP_TIERS);
+  }
 
   async function handleCreateAgent() {
     setSubmitting(true);
@@ -777,7 +1101,8 @@ export default function OnboardingPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          openrouterApiKey: apiKey,
+          openrouterApiKey: apiKey || undefined,
+          providers: [...selectedProviders],
           tiers,
           telegram: {
             botToken,
@@ -803,9 +1128,8 @@ export default function OnboardingPage() {
         return;
       }
 
-      setSetupComplete(true);
-      setStep(7);
-    } catch (err) {
+      setStep(STEP_DONE);
+    } catch {
       toast.error("Setup failed — check your connection");
       setSubmitting(false);
     }
@@ -814,16 +1138,26 @@ export default function OnboardingPage() {
   return (
     <div className="min-h-screen bg-background flex items-center justify-center p-8">
       <div className="w-full max-w-xl space-y-8">
-        <StepIndicator current={step} total={TOTAL_STEPS} />
+        <StepIndicator current={indicatorIndex} total={totalSteps} labels={labels} />
 
-        {step === 0 && <StepWelcome onNext={() => setStep(1)} />}
-        {step === 1 && <StepApiKey apiKey={apiKey} setApiKey={setApiKey} onNext={() => setStep(2)} onBack={() => setStep(0)} />}
-        {step === 2 && <StepTiers tiers={tiers} setTiers={setTiers} onNext={() => setStep(3)} onBack={() => setStep(1)} />}
-        {step === 3 && <StepTelegram botToken={botToken} setBotToken={setBotToken} ownerId={ownerId} setOwnerId={setOwnerId} onNext={() => setStep(4)} onBack={() => setStep(2)} />}
-        {step === 4 && <StepVoice groqApiKey={groqApiKey} setGroqApiKey={setGroqApiKey} onNext={() => setStep(5)} onBack={() => setStep(3)} />}
-        {step === 5 && <StepAgent agentName={agentName} setAgentName={setAgentName} agentDescription={agentDescription} setAgentDescription={setAgentDescription} agentTier={agentTier} setAgentTier={setAgentTier} ownerName={ownerName} setOwnerName={setOwnerName} onNext={() => setStep(6)} onBack={() => setStep(4)} />}
-        {step === 6 && <StepCapabilities selectedTools={selectedTools} setSelectedTools={setSelectedTools} selectedSkills={selectedSkills} setSelectedSkills={setSelectedSkills} onSubmit={handleCreateAgent} onBack={() => setStep(5)} submitting={submitting} />}
-        {step === 7 && <StepDone agentName={agentName} />}
+        {step === STEP_WELCOME && <StepWelcome onNext={() => setStep(STEP_PROVIDERS)} />}
+        {step === STEP_PROVIDERS && <StepProviders selectedProviders={selectedProviders} setSelectedProviders={setSelectedProviders} onNext={goNext} onBack={goBack} />}
+        {step === STEP_API_KEY && <StepApiKey apiKey={apiKey} setApiKey={setApiKey} onNext={goNext} onBack={goBack} />}
+        {step === STEP_CODEX && <StepCodex onNext={goNext} onBack={goBack} onSkip={handleCodexSkip} />}
+        {step === STEP_TIERS && (
+          <StepTiers
+            tiers={tiers}
+            setTiers={(v) => { setTiers(v); setTiersEdited(true); }}
+            selectedProviders={selectedProviders}
+            onNext={goNext}
+            onBack={goBack}
+          />
+        )}
+        {step === STEP_TELEGRAM && <StepTelegram botToken={botToken} setBotToken={setBotToken} ownerId={ownerId} setOwnerId={setOwnerId} onNext={goNext} onBack={goBack} />}
+        {step === STEP_VOICE && <StepVoice groqApiKey={groqApiKey} setGroqApiKey={setGroqApiKey} onNext={goNext} onBack={goBack} />}
+        {step === STEP_AGENT && <StepAgent agentName={agentName} setAgentName={setAgentName} agentDescription={agentDescription} setAgentDescription={setAgentDescription} agentTier={agentTier} setAgentTier={setAgentTier} ownerName={ownerName} setOwnerName={setOwnerName} onNext={goNext} onBack={goBack} />}
+        {step === STEP_CAPABILITIES && <StepCapabilities selectedTools={selectedTools} setSelectedTools={setSelectedTools} selectedSkills={selectedSkills} setSelectedSkills={setSelectedSkills} onSubmit={handleCreateAgent} onBack={goBack} submitting={submitting} />}
+        {step === STEP_DONE && <StepDone agentName={agentName} />}
       </div>
     </div>
   );

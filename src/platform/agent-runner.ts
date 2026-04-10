@@ -22,6 +22,7 @@ import { buildMemoryScope } from "../agent/memory-scope.js";
 import { classifyChat } from "../agent/filter.js";
 import type { ChatType } from "../agent/filter.js";
 import { getModelForId } from "../agent/model.js";
+import { getConversationTempo, formatElapsedHuman, categorizeTempo, computeSmartLastMessages } from "../memory/smart-recall.js";
 import { logger } from "../utils/external-logger.js";
 import { isTransientApiError } from "../utils/api-errors.js";
 
@@ -39,6 +40,12 @@ export interface AgentRunnerDeps {
   jobQueue?: import("../scheduler/job-queue.js").JobQueue;
   settingsStore?: import("../scheduler/settings-store.js").SettingsStore;
   agentSettings?: import("./agent-settings.js").AgentSettings;
+  /**
+   * Optional Memory instance for direct queries (e.g. tempo / smart-recall).
+   * The Agent has its own memory configured internally; this dep mirrors it
+   * so the runner can call .recall() without reaching into agent internals.
+   */
+  memory?: import("@mastra/memory").Memory;
 }
 
 export interface ProcessMessageOptions {
@@ -46,6 +53,13 @@ export interface ProcessMessageOptions {
   sender?: string;
   imageData?: { base64: string; mimeType: string; filePath?: string };
   onProgressText?: (text: string) => Promise<void>;
+  /**
+   * Per-call override for the memory `lastMessages` cap. When set, this turn
+   * loads exactly N most-recent messages instead of the agent-configured value.
+   * Used by the smart-recall computation (window + min/max clamp).
+   * Ignored for background runs (which already force lastMessages: 0).
+   */
+  lastMessagesOverride?: number;
 }
 
 export interface ProcessMessageResult {
@@ -69,6 +83,7 @@ export class AgentRunner {
   private jobQueue?: import("../scheduler/job-queue.js").JobQueue;
   private settingsStore?: import("../scheduler/settings-store.js").SettingsStore;
   private agentSettings?: import("./agent-settings.js").AgentSettings;
+  private memory?: import("@mastra/memory").Memory;
 
   /** Per-chat promise chain to prevent concurrent processing for the same chat. */
   private chatQueues = new Map<string, Promise<void>>();
@@ -86,6 +101,7 @@ export class AgentRunner {
     this.jobQueue = deps.jobQueue;
     this.settingsStore = deps.settingsStore;
     this.agentSettings = deps.agentSettings;
+    this.memory = deps.memory;
   }
 
   // ── Resilience helpers ────────────────────────────────────
@@ -185,6 +201,89 @@ export class AgentRunner {
     const isBackgroundRun = promptMode === "autonomous";
     const maxSteps = this.agentSettings?.getMaxSteps(agentId) ?? 30;
 
+    // Resolve the per-turn lastMessages override:
+    //   1. Explicit caller override (test harness --smart-memory flag)  → wins
+    //   2. Smart Recall (when enabled)                                  → window-aware compute
+    //   3. Static `memory.lastMessages` setting                         → live fallback
+    //
+    // The static fallback is critical: without it, the construction-time value
+    // baked into the Memory instance becomes the source of truth, and UI edits
+    // to "Last Messages" don't take effect until a platform restart. By always
+    // passing it per-turn, the UI is fully live regardless of which path runs.
+    let resolvedLastMessagesOverride = options.lastMessagesOverride;
+    if (
+      !isBackgroundRun &&
+      resolvedLastMessagesOverride === undefined &&
+      this.agentSettings
+    ) {
+      const smartCfg = this.memory ? this.agentSettings.getSmartRecallConfig(agentId) : null;
+      if (smartCfg && this.memory) {
+        try {
+          const result = await computeSmartLastMessages(
+            this.memory,
+            memoryScope.thread,
+            smartCfg,
+            memoryScope.resource,
+          );
+          resolvedLastMessagesOverride = result.resolved;
+          if (process.env.GOLEM_DEBUG_TEMPO === "1") {
+            const tokSuffix = result.estimatedTokens !== undefined ? ` est_tokens=${result.estimatedTokens}` : "";
+            console.log(`[${agentId}] [smart-recall] countInWindow=${result.countInWindow} → lastMessages=${result.resolved} (${result.reason}${tokSuffix})`);
+          }
+        } catch (err) {
+          // Smart recall is best-effort — fall through to the static cap fallback below
+          console.warn(`[${agentId}] smart-recall failed:`, err instanceof Error ? err.message : err);
+        }
+      }
+      // Static fallback: smart recall disabled OR threw → use the live setting value
+      if (resolvedLastMessagesOverride === undefined) {
+        const staticCap = this.agentSettings.getLastMessages(agentId);
+        if (staticCap !== null) {
+          resolvedLastMessagesOverride = staticCap;
+          if (process.env.GOLEM_DEBUG_TEMPO === "1") {
+            console.log(`[${agentId}] [static-cap] lastMessages=${staticCap} (live from settings)`);
+          }
+        }
+      }
+    }
+
+    // Tempo awareness: how long ago was the user's previous message?
+    // Background runs (cron/proactive) skip this — there's no live user gap
+    // to reason about. Brief follow-ups (<60s) are also suppressed because
+    // "just now" adds no signal and clutters the prompt. Per-agent toggle
+    // controls whether the tempo line is injected at all.
+    const tempoEnabled = this.agentSettings?.getTempoEnabled(agentId) ?? true;
+    // Signal tempo state to per-turn processors (e.g. MessageTimestampProcessor).
+    // Set even when there's no eligible previous user message — the processor
+    // gates per-message stamping on this flag, which is independent of whether
+    // the system-prompt tempo line gets injected.
+    if (!isBackgroundRun && tempoEnabled) {
+      requestContext.set("memoryTempoEnabled", true);
+    }
+    if (!isBackgroundRun && this.memory && tempoEnabled) {
+      try {
+        const tempo = await getConversationTempo(
+          this.memory,
+          memoryScope.thread,
+          memoryScope.resource,
+        );
+        if (tempo && tempo.msSinceLastUserMessage >= 60_000) {
+          const formatted = formatElapsedHuman(tempo.msSinceLastUserMessage);
+          const band = categorizeTempo(tempo.msSinceLastUserMessage);
+          requestContext.set("memoryTempo", formatted);
+          requestContext.set("memoryTempoBand", band);
+          if (process.env.GOLEM_DEBUG_TEMPO === "1") {
+            console.log(`[${agentId}] [tempo] previous user message ${formatted} ago (band=${band}, ${tempo.msSinceLastUserMessage}ms)`);
+          }
+        } else if (process.env.GOLEM_DEBUG_TEMPO === "1") {
+          console.log(`[${agentId}] [tempo] no eligible previous user message (tempo=${JSON.stringify(tempo)})`);
+        }
+      } catch (err) {
+        // Tempo is decorative — never let it block a turn
+        console.warn(`[${agentId}] tempo lookup failed:`, err instanceof Error ? err.message : err);
+      }
+    }
+
     try {
       const startMs = Date.now();
       try { logger.info(`Agent turn started: "${text.slice(0, 120)}"`, { agent: agentId, chatType, promptMode }); } catch { /* ignore */ }
@@ -194,6 +293,22 @@ export class AgentRunner {
       // Working memory is maintained via 1:1 conversations only.
       // Fix #2: use chatType instead of ID comparison — admin groups are promoted to "owner"
       const isGroupChat = chatType === "group";
+
+      // Merge per-turn memory options. NOTE: do not spread multiple `options:` keys
+      // into the memory object — each spread overwrites the previous one. Build a
+      // single merged object instead.
+      const memoryTurnOptions: Record<string, unknown> = {};
+      if (isBackgroundRun) {
+        memoryTurnOptions.lastMessages = 0;
+        memoryTurnOptions.semanticRecall = false;
+      }
+      if (isGroupChat) {
+        memoryTurnOptions.workingMemory = { enabled: false };
+      }
+      if (!isBackgroundRun && resolvedLastMessagesOverride !== undefined) {
+        memoryTurnOptions.lastMessages = resolvedLastMessagesOverride;
+      }
+
       // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Mastra generate options type is complex
       const generateOptions: Record<string, any> = {
         maxSteps,
@@ -201,8 +316,7 @@ export class AgentRunner {
         memory: {
           thread: memoryScope.thread,
           resource: memoryScope.resource,
-          ...(isBackgroundRun && { options: { lastMessages: 0, semanticRecall: false } }),
-          ...(isGroupChat && { options: { workingMemory: { enabled: false } } }),
+          ...(Object.keys(memoryTurnOptions).length > 0 && { options: memoryTurnOptions }),
         },
         // Delegation hooks for supervisor pattern (sub-agent orchestration)
         // NOTE: context.iteration is derived from assistant message count in memory,
@@ -298,15 +412,21 @@ export class AgentRunner {
       // Build multimodal message when image is present
       // eslint-disable-next-line @typescript-eslint/no-explicit-any -- CoreMessage content types are complex
       let messageInput: any = text;
+      let codexImageDataUri: string | undefined;
       if (options.imageData) {
         // Pass the image as a base64 data URI — the format that works most
         // consistently across providers (Claude, GPT, Gemini Flash all accept it).
-        // Gemini Pro Preview has a separate issue with multi-image conversation
-        // history but this format itself is correct.
+        // CRITICAL: the field name must be `mimeType`, not `mediaType`. Mastra's
+        // TypeDetector uses `mimeType` to route the message through the AIV4
+        // conversion path, which correctly preserves multimodal user messages.
+        // Switching to `mediaType` forces the AIV5 path which silently drops
+        // the entire message before it reaches the LLM provider. This was a
+        // 2026-04-09 regression that I introduced and reverted.
         const base64 = options.imageData.filePath
           ? fs.readFileSync(options.imageData.filePath).toString("base64")
           : options.imageData.base64;
         const dataUri = `data:${options.imageData.mimeType};base64,${base64}`;
+        codexImageDataUri = dataUri;
         messageInput = [{
           role: "user" as const,
           content: [
@@ -314,6 +434,21 @@ export class AgentRunner {
             { type: "text" as const, text: text || "What do you see in this image?" },
           ],
         }];
+      }
+      // Backchannel: pass image data on providerOptions.codex so the codex
+      // provider can inject it directly into the Codex Responses API request.
+      // Used when Mastra's prompt conversion drops the file part (which can
+      // happen on v3-spec providers when the message format is incompatible).
+      // Other providers ignore this field.
+      if (codexImageDataUri) {
+        generateOptions.providerOptions = {
+          ...(generateOptions.providerOptions || {}),
+          codex: {
+            ...(generateOptions.providerOptions?.codex || {}),
+            inlineImageDataUri: codexImageDataUri,
+            inlineImageText: text || "What do you see in this image?",
+          },
+        };
       }
 
       // DEBUG: log what we're about to pass to agent.generate()

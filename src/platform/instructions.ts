@@ -37,6 +37,135 @@ export const LANGUAGE_PRESETS: Record<string, string> = {
   auto_detect: "Respond in the same language the user writes in. If the message mixes languages, match the dominant language. Default to English for ambiguous cases.",
 };
 
+// ── Tempo section variants ─────────────────────────────────
+//
+// The conversation-tempo prompt is a tricky bit of instruction design. Small
+// models tend to read the line, acknowledge it, and respond identically. The
+// variants below explore different framings — categorical labels, imperative
+// DO/DON'T, single-line ultra-tight, and consequence-first. Switch via the
+// GOLEM_TEMPO_VARIANT env var (defaults to "v8").
+
+type TempoBand = "active" | "recent" | "stale" | "cold";
+
+function buildTempoSection(elapsed: string, band: TempoBand | undefined): string {
+  const variant = process.env.GOLEM_TEMPO_VARIANT || "v10";
+  const b = band || "recent";
+  switch (variant) {
+    case "v5": return tempoVariantV5(elapsed, b);
+    case "v6": return tempoVariantV6(elapsed, b);
+    case "v7": return tempoVariantV7(elapsed, b);
+    case "v8": return tempoVariantV8(elapsed, b);
+    case "v9": return tempoVariantV9(elapsed, b);
+    case "v10": return tempoVariantV10(elapsed, b);
+    default:   return tempoVariantV8(elapsed, b);
+  }
+}
+
+/** V10 — Allow EXPLICIT acknowledgment for cold cases (drops silent constraint). */
+function tempoVariantV10(elapsed: string, band: TempoBand): string {
+  if (band === "cold") {
+    return `### Conversation tempo
+The user has been away for ${elapsed}. This is a real gap, not a follow-up.
+
+When you reply, you SHOULD briefly acknowledge that the user is picking the conversation back up after this gap. Examples of natural acknowledgments:
+- "Hey — back to the lasagna?"
+- "Oh hey, returning to this —"
+- "Right, the lasagna conversation. So..."
+
+Treat any "tomorrow" or "today" references from the prior conversation as past events. The dinner party / deadline / appointment that was upcoming when you last spoke has likely happened by now. If relevant, ask how it went or pivot to advice for next time.
+
+You may reference the gap in natural language ("a while back", "the other day") but don't quote the exact duration.`;
+  }
+  if (band === "stale") {
+    return `### Conversation tempo
+${elapsed} since the previous user message. The user came back to this later. Respond directly without greeting. Don't ask "how much time do you have" or other live-session logistics. Don't quote the elapsed time.`;
+  }
+  return `### Conversation tempo
+${elapsed} since the previous user message. Continue mid-thread without greeting or summary. Don't quote the elapsed time.`;
+}
+
+/** V5 — Categorical label + tight directives. */
+function tempoVariantV5(elapsed: string, band: TempoBand): string {
+  const status = band === "active" ? "ACTIVE"
+    : band === "recent" ? "RECENT"
+    : band === "stale" ? "STALE"
+    : "COLD";
+  return `### Conversation status
+Last activity: ${elapsed} ago. Status: ${status}.
+${
+  band === "cold"
+    ? `This conversation is COLD. Any prior references to "tomorrow" / "today" / "later" point to events that are now in the past. Do not ask logistics questions ("how much time do you have"). Give a self-contained reply that does not build on the prior plan. Do not quote the elapsed time.`
+    : band === "stale"
+    ? `This conversation is STALE — the user came back to it later in the day. Respond directly. Do not ask logistics questions that assume a fast-moving exchange. Do not greet. Do not quote the elapsed time.`
+    : `Continue mid-thread. No greeting, no summary, no logistics questions. Do not quote the elapsed time.`
+}`;
+}
+
+/** V6 — Lead with the verdict, not the duration. */
+function tempoVariantV6(elapsed: string, band: TempoBand): string {
+  const lead = band === "cold"
+    ? `You are picking up a COLD conversation (${elapsed} since last user message).`
+    : band === "stale"
+    ? `You are returning to a STALE conversation (${elapsed} since last user message).`
+    : band === "recent"
+    ? `You are continuing a RECENT exchange (${elapsed} since last user message).`
+    : `You are mid-thread (${elapsed} since last user message).`;
+
+  return `### Conversation tempo
+${lead}
+
+${
+  band === "cold"
+    ? `Anything the prior conversation called "tomorrow" or "today" is now past. Do not assume the original plan still applies. Do not ask "how much time do you have" or other live-session logistics. Give a fresh, self-contained answer. Never quote the elapsed time.`
+    : band === "stale"
+    ? `Respond directly without greeting. Do not ask logistics questions that only make sense in a live exchange. Never quote the elapsed time.`
+    : `Continue without greeting or summary. Never quote the elapsed time.`
+}`;
+}
+
+/** V7 — Single-line ultra-tight (one sentence + one constraint). */
+function tempoVariantV7(elapsed: string, band: TempoBand): string {
+  const guidance = band === "cold"
+    ? `treat any prior "tomorrow"/"today" references as past events and answer self-contained`
+    : band === "stale"
+    ? `respond directly without asking live-session logistics questions`
+    : `continue mid-thread without greeting`;
+  return `Conversation tempo: ${elapsed} since the previous user message — ${guidance}. Never quote the elapsed time.`;
+}
+
+/** V8 — Categorical label + DO/DON'T imperatives (small-model friendly). */
+function tempoVariantV8(elapsed: string, band: TempoBand): string {
+  const lines: string[] = [];
+  lines.push(`### Conversation tempo`);
+  lines.push(`Last user message: ${elapsed} ago. [${band.toUpperCase()}]`);
+  lines.push("");
+  if (band === "cold") {
+    lines.push(`DO: give a self-contained answer; assume the prior plan no longer applies.`);
+    lines.push(`DON'T: reference "tomorrow"/"today"/"later" from the prior context — those events have already happened.`);
+    lines.push(`DON'T: ask "how much time do you have" or other live-session logistics.`);
+    lines.push(`DON'T: quote the elapsed duration aloud.`);
+  } else if (band === "stale") {
+    lines.push(`DO: respond directly, no greeting.`);
+    lines.push(`DON'T: ask logistics questions that only make sense in a fast-moving exchange.`);
+    lines.push(`DON'T: quote the elapsed duration aloud.`);
+  } else {
+    lines.push(`DO: continue mid-thread.`);
+    lines.push(`DON'T: greet, summarize, or quote the elapsed duration.`);
+  }
+  return lines.join("\n");
+}
+
+/** V9 — Two-line minimal: state + single forbidden behavior. */
+function tempoVariantV9(elapsed: string, band: TempoBand): string {
+  if (band === "cold") {
+    return `Conversation state: COLD (${elapsed} idle). The dinner-party / deadline / event from the prior conversation is now in the past. Answer self-contained — do not build on the prior plan.`;
+  }
+  if (band === "stale") {
+    return `Conversation state: STALE (${elapsed} idle). Answer directly without asking live-session logistics.`;
+  }
+  return `Conversation state: ACTIVE (${elapsed}). Continue mid-thread.`;
+}
+
 /** Assemble a ## Behavior section from dropdown presets + custom instructions. */
 export function buildBehaviorSection(behavior: BehaviorConfig): string {
   const parts = [
@@ -73,6 +202,15 @@ export interface PromptParams {
   isGroup?: boolean;
   /** Agent behavior config (from settings dropdowns) */
   behavior?: BehaviorConfig;
+  /**
+   * Pre-formatted "time since previous user message" string (e.g. "4h 12m",
+   * "3 days", "just now"). When set, a tempo line is appended to the Memory
+   * section so the agent has conversational tempo awareness. Omit on
+   * brand-new conversations or under-1-minute follow-ups.
+   */
+  tempoSincePreviousUserMessage?: string;
+  /** Discrete tempo band — active | recent | stale | cold. */
+  tempoBand?: "active" | "recent" | "stale" | "cold";
 }
 
 /** Build platform prompt sections separately for flexible ordering and UI display */
@@ -85,6 +223,8 @@ export function buildPlatformPromptSections(params: PromptParams): { label: stri
     lastMessages = 12,
     isGroup = false,
     behavior,
+    tempoSincePreviousUserMessage,
+    tempoBand,
   } = params;
   const displayName = characterName || agentName;
 
@@ -105,13 +245,11 @@ export function buildPlatformPromptSections(params: PromptParams): { label: stri
     });
   }
 
-  sections.push(
-    // NOTE: Delegation is inserted after Memory by platform.ts
-    {
-      label: "Memory",
-      content: isGroup
-        ? `You have conversation history from this group chat. Your working memory (preferences, facts) is available from your 1:1 conversations but is read-only in group context.`
-        : `You are in an ongoing conversation with 2 memory layers.
+  // Build the memory section content. The tempo line lives at the end so the
+  // agent reads the standing memory layout first, then the situational tempo.
+  const buildMemoryContent = (): string => {
+    const baseGroup = `You have conversation history from this group chat. Your working memory (preferences, facts) is available from your 1:1 conversations but is read-only in group context.`;
+    const baseDirect = `You are in an ongoing conversation with 2 memory layers.
 Layer 1: Recent conversation history — the last ${lastMessages} messages. Your primary reference for conversational continuity.
 Layer 2: Working memory — a persistent scratchpad with your profile, preferences, ongoing projects, and key facts. Always visible in your context.
 
@@ -120,7 +258,22 @@ Update working memory using \`updateWorkingMemory\` when:
 - A new ongoing project or deadline is mentioned
 - You discover something about the user's environment (accounts, tools, contacts)
 - The user's communication style or tone preferences become clear
-- You notice outdated facts (completed goals, changed preferences, old deadlines) — update or remove them`,
+- You notice outdated facts (completed goals, changed preferences, old deadlines) — update or remove them`;
+
+    let content = isGroup ? baseGroup : baseDirect;
+
+    if (tempoSincePreviousUserMessage) {
+      content += "\n\n" + buildTempoSection(tempoSincePreviousUserMessage, tempoBand);
+    }
+
+    return content;
+  };
+
+  sections.push(
+    // NOTE: Delegation is inserted after Memory by platform.ts
+    {
+      label: "Memory",
+      content: buildMemoryContent(),
     },
     {
       label: "Failure Handling",

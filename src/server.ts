@@ -62,12 +62,20 @@ interface ServerDeps {
   };
 }
 
-// ── OpenRouter models cache ─────────────────────────────
-let cachedModels: { id: string; name: string; contextLength: number }[] | null = null;
+// ── Provider model catalog (OpenRouter + Codex) ──────────
+interface ProviderModel {
+  id: string;
+  name: string;
+  contextLength: number;
+  /** "openrouter" for OpenRouter-routed models, "codex" for ChatGPT-OAuth Codex models. */
+  provider: "openrouter" | "codex";
+}
+
+let cachedModels: ProviderModel[] | null = null;
 let modelsCacheTime = 0;
 const MODELS_CACHE_TTL_MS = 3_600_000;
 
-async function fetchOpenRouterModels(): Promise<{ id: string; name: string; contextLength: number }[]> {
+async function fetchOpenRouterModels(): Promise<ProviderModel[]> {
   const now = Date.now();
   if (cachedModels && now - modelsCacheTime < MODELS_CACHE_TTL_MS) return cachedModels;
   const apiKey = process.env.OPENROUTER_API_KEY;
@@ -77,12 +85,30 @@ async function fetchOpenRouterModels(): Promise<{ id: string; name: string; cont
   });
   if (!resp.ok) throw new Error(`OpenRouter API error: ${resp.status}`);
   const data = await resp.json() as { data: Array<{ id: string; name: string; context_length: number }> };
-  const models = data.data
-    .map((m) => ({ id: m.id, name: m.name, contextLength: m.context_length }))
+  const models: ProviderModel[] = data.data
+    .map((m) => ({ id: m.id, name: m.name, contextLength: m.context_length, provider: "openrouter" as const }))
     .sort((a, b) => a.id.localeCompare(b.id));
   cachedModels = models;
   modelsCacheTime = now;
   return models;
+}
+
+/**
+ * Merge OpenRouter + Codex models into a single catalog. Codex models are
+ * always available (no API call); OpenRouter models are fetched + cached.
+ * Codex models sort to the top because their "codex/" prefix sorts before
+ * any other provider namespace.
+ */
+async function fetchAllModels(): Promise<ProviderModel[]> {
+  const { getCodexModelsForUI } = await import("./agent/codex-models.js");
+  const codex: ProviderModel[] = getCodexModelsForUI();
+  let openrouter: ProviderModel[] = [];
+  try {
+    openrouter = await fetchOpenRouterModels();
+  } catch {
+    // Surface only Codex models if OpenRouter fetch fails (missing API key, network issue)
+  }
+  return [...codex, ...openrouter];
 }
 
 // ── Log viewer helpers ──────────────────────────────────
@@ -198,46 +224,33 @@ export function startServer(deps: ServerDeps) {
         const body = JSON.parse(await readBody(req));
         const envPath = path.resolve(".env");
 
-        // 1. Write API key to .env
-        if (body.openrouterApiKey) {
+        // 1. Write secrets to .env (each key is independent)
+        {
           let envContent = "";
           try { envContent = fs.readFileSync(envPath, "utf-8"); } catch { /* file doesn't exist yet */ }
 
-          // Replace or append OPENROUTER_API_KEY
-          if (envContent.includes("OPENROUTER_API_KEY=")) {
-            envContent = envContent.replace(/^[#\s]*OPENROUTER_API_KEY=.*/gm, `OPENROUTER_API_KEY=${body.openrouterApiKey}`);
-          } else {
-            envContent += `${envContent && !envContent.endsWith("\n") ? "\n" : ""}OPENROUTER_API_KEY=${body.openrouterApiKey}\n`;
-          }
-
-          // Write Groq API key if provided
-          if (body.groqApiKey) {
-            if (envContent.includes("GROQ_API_KEY=")) {
-              envContent = envContent.replace(/^[#\s]*GROQ_API_KEY=.*/gm, `GROQ_API_KEY=${body.groqApiKey}`);
+          const writeEnvVar = (key: string, value: string) => {
+            if (envContent.includes(`${key}=`)) {
+              envContent = envContent.replace(new RegExp(`^[#\\s]*${key}=.*`, "gm"), `${key}=${value}`);
             } else {
-              envContent += `GROQ_API_KEY=${body.groqApiKey}\n`;
+              envContent += `${envContent && !envContent.endsWith("\n") ? "\n" : ""}${key}=${value}\n`;
             }
-          }
+            process.env[key] = value;
+          };
 
-          // Write bot token if provided
+          if (body.openrouterApiKey) writeEnvVar("OPENROUTER_API_KEY", body.openrouterApiKey);
+          if (body.groqApiKey) writeEnvVar("GROQ_API_KEY", body.groqApiKey);
           if (body.telegram?.botToken) {
             const tokenVar = body.telegram.botTokenVar || "TELEGRAM_BOT_TOKEN";
-            if (envContent.includes(`${tokenVar}=`)) {
-              envContent = envContent.replace(new RegExp(`^[#\\s]*${tokenVar}=.*`, "gm"), `${tokenVar}=${body.telegram.botToken}`);
-            } else {
-              envContent += `${tokenVar}=${body.telegram.botToken}\n`;
-            }
+            writeEnvVar(tokenVar, body.telegram.botToken);
           }
 
           fs.writeFileSync(envPath, envContent, "utf-8");
-          // Set in current process so immediate API calls work
-          process.env.OPENROUTER_API_KEY = body.openrouterApiKey;
-          if (body.telegram?.botToken) {
-            process.env[body.telegram.botTokenVar || "TELEGRAM_BOT_TOKEN"] = body.telegram.botToken;
-          }
-          if (body.groqApiKey) {
-            process.env.GROQ_API_KEY = body.groqApiKey;
-          }
+        }
+
+        // 1b. Store selected providers in settings.db
+        if (body.providers && deps.agentSettings) {
+          deps.agentSettings.setGlobalJson("global.providers", body.providers);
         }
 
         // 2. Enable whisper if Groq key provided
@@ -276,7 +289,7 @@ export function startServer(deps: ServerDeps) {
               ownerId: body.telegram?.ownerId || 0,
             },
             llm: {
-              provider: "openrouter",
+              provider: body.tiers?.[body.agent.tier || "low"]?.startsWith("codex/") ? "codex" : "openrouter",
               tier: (body.agent.tier || "low") as "low" | "med" | "high",
               override: null,
               temperature: 0.2,
@@ -431,12 +444,147 @@ export function startServer(deps: ServerDeps) {
       return json(res, { error: "Restart not available" }, 503);
     }
 
-    // ── Models (OpenRouter) ───────────────────────────────
+    // ── Models (OpenRouter + Codex) ───────────────────────
     if (req.method === "GET" && pathname === "/api/models") {
       try {
-        const models = await fetchOpenRouterModels();
+        const models = await fetchAllModels();
         return json(res, { models });
       } catch (err) { return json(res, { error: err instanceof Error ? err.message : String(err) }, 500); }
+    }
+
+    // ── Providers status ──────────────────────────────────
+    if (req.method === "GET" && pathname === "/api/providers") {
+      try {
+        const { describeCredentialSource, loadCredentials } = await import("./agent/codex-auth-store.js");
+        const { getCodexModelsForUI } = await import("./agent/codex-models.js");
+        const { getCodexQuota, liveResetAfterSeconds } = await import("./platform/codex-quota-store.js");
+        const codexCreds = loadCredentials();
+        const codexSource = describeCredentialSource();
+
+        // Decode JWT to surface plan + email
+        let codexPlan: string | null = null;
+        let codexEmail: string | null = null;
+        if (codexCreds) {
+          try {
+            const payload = JSON.parse(Buffer.from(codexCreds.access.split(".")[1], "base64").toString("utf-8"));
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const auth = (payload as any)["https://api.openai.com/auth"];
+            codexPlan = auth?.chatgpt_plan_type ?? null;
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            codexEmail = (payload as any)["https://api.openai.com/profile"]?.email ?? null;
+          } catch { /* ignore */ }
+        }
+
+        // Build the live quota snapshot for the UI. Stored values can be a few
+        // seconds old; we recompute the reset countdowns from `capturedAt`.
+        const rawQuota = getCodexQuota();
+        const quota = rawQuota ? {
+          planType: rawQuota.planType,
+          activeLimit: rawQuota.activeLimit,
+          creditsUnlimited: rawQuota.creditsUnlimited,
+          creditsHasCredits: rawQuota.creditsHasCredits,
+          capturedAt: rawQuota.capturedAt,
+          primary: rawQuota.primary ? {
+            windowMinutes: rawQuota.primary.windowMinutes,
+            usedPercent: rawQuota.primary.usedPercent,
+            resetAfterSeconds: liveResetAfterSeconds(rawQuota.primary, rawQuota.capturedAt),
+            resetAt: rawQuota.primary.resetAt,
+          } : null,
+          secondary: rawQuota.secondary ? {
+            windowMinutes: rawQuota.secondary.windowMinutes,
+            usedPercent: rawQuota.secondary.usedPercent,
+            resetAfterSeconds: liveResetAfterSeconds(rawQuota.secondary, rawQuota.capturedAt),
+            resetAt: rawQuota.secondary.resetAt,
+          } : null,
+        } : null;
+
+        return json(res, {
+          providers: [
+            {
+              id: "openrouter",
+              name: "OpenRouter",
+              configured: !!process.env.OPENROUTER_API_KEY,
+              authType: "api_key",
+              status: process.env.OPENROUTER_API_KEY ? "configured" : "missing_api_key",
+              note: "Pay-per-token aggregator. Required for non-Codex models.",
+            },
+            {
+              id: "codex",
+              name: "OpenAI Codex",
+              configured: !!codexCreds,
+              authType: "oauth",
+              status: codexCreds ? "configured" : "not_logged_in",
+              source: codexSource?.source ?? null,
+              sourcePath: codexSource?.path ?? null,
+              expiresIn: codexSource?.expiresIn ?? null,
+              accountId: codexCreds?.accountId ?? null,
+              plan: codexPlan,
+              email: codexEmail,
+              models: getCodexModelsForUI(),
+              quota,
+              note: "ChatGPT subscription via OAuth. No per-token cost (subject to fair-use quota).",
+            },
+          ],
+        });
+      } catch (err) {
+        return json(res, { error: err instanceof Error ? err.message : String(err) }, 500);
+      }
+    }
+
+    // ── Codex OAuth login (server-side) ────────────────────
+    // Singleton guard: only one OAuth flow at a time. Subsequent calls
+    // return the same auth URL instead of starting a competing flow.
+    if (req.method === "POST" && pathname === "/api/codex/login") {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const g = globalThis as any;
+      // If a flow is already in progress, return its URL
+      if (g.__codexLoginUrl && g.__codexLoginPending) {
+        return json(res, { url: g.__codexLoginUrl });
+      }
+      try {
+        const { loginOpenAICodex } = await import("@mariozechner/pi-ai/oauth");
+        await import("node:crypto");
+        await import("node:http");
+        await new Promise<void>(r => setImmediate(r));
+        await new Promise<void>(r => setImmediate(r));
+
+        g.__codexLoginPending = true;
+        g.__codexLoginUrl = null;
+
+        const authUrlReady = new Promise<string>((resolve) => {
+          loginOpenAICodex({
+            onAuth: ({ url }) => {
+              g.__codexLoginUrl = url;
+              resolve(url);
+            },
+            onPrompt: async () => "",
+            onProgress: () => {},
+            originator: "golem",
+          }).then((creds) => {
+            const credsPath = dataPath("codex-credentials.json");
+            fs.mkdirSync(path.dirname(credsPath), { recursive: true });
+            fs.writeFileSync(credsPath, JSON.stringify(creds, null, 2));
+            try { fs.chmodSync(credsPath, 0o600); } catch { /* best effort */ }
+            console.log("[codex/login] OAuth completed, credentials saved");
+          }).catch((err) => {
+            console.error("[codex/login] OAuth failed:", err instanceof Error ? err.message : err);
+          }).finally(() => {
+            g.__codexLoginPending = false;
+            g.__codexLoginUrl = null;
+          });
+        });
+
+        const url = await Promise.race([
+          authUrlReady,
+          new Promise<string>((_, reject) => setTimeout(() => reject(new Error("Timeout waiting for auth URL")), 15_000)),
+        ]);
+
+        return json(res, { url });
+      } catch (err) {
+        g.__codexLoginPending = false;
+        g.__codexLoginUrl = null;
+        return json(res, { error: err instanceof Error ? err.message : String(err) }, 500);
+      }
     }
 
     // ── Available tools ───────────────────────────────────

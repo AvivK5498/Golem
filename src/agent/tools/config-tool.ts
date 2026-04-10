@@ -97,13 +97,19 @@ export const configUpdateTool = createTool({
     "Sensitive paths (tokens, auth) are blocked. " +
     "Use 'read' first to understand the current state before proposing changes.",
   inputSchema: z.object({
-    action: z.enum(["read", "propose", "apply"]),
+    action: z.enum(["read", "propose", "apply"]).describe(
+      "Operation to perform: " +
+      "'read' returns the current value of `key` (or all settings if no key given), " +
+      "'propose' shows the current and proposed values without writing — use to preview before applying, " +
+      "'apply' persists the change (requires owner approval). " +
+      "Always 'propose' first for non-trivial changes; only 'apply' directly when the user has already confirmed."
+    ),
     key: z.string().optional().describe(
       "Dot-notation settings key (e.g., 'global.server.port', 'global.whisper.enabled'). " +
       "Global settings use the 'global.' prefix.",
     ),
     value: z.unknown().optional().describe(
-      "New value for propose/apply actions",
+      "New value for propose/apply actions. Type matches the setting (boolean, number, string, array, etc.)."
     ),
   }),
   inputExamples: [

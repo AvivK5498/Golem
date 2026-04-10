@@ -2,18 +2,21 @@
 
 A self-hosted platform for creating and managing personal AI agents. Each agent connects to its own Telegram bot and can be configured with custom personas, tools, skills, and MCP server integrations.
 
-Built on [Mastra](https://mastra.ai) + [Vercel AI SDK](https://ai-sdk.dev). Uses [OpenRouter](https://openrouter.ai) for access to 300+ LLM models.
+Built on [Mastra](https://mastra.ai) + [Vercel AI SDK](https://ai-sdk.dev). Supports [OpenRouter](https://openrouter.ai) (300+ models, pay-per-token) and [OpenAI Codex](https://openai.com/index/introducing-codex/) (ChatGPT subscription, subject to fair-use quota).
 
 ![Welcome](screenshots/welcome.png)
 
 ## Features
 
 - **Multi-agent platform** — Run multiple agents, each with their own Telegram bot, persona, and toolset
-- **Guided onboarding** — 6-step wizard walks you through API keys, model tiers, Telegram setup, voice transcription, and your first agent
+- **Guided onboarding** — Wizard walks you through provider selection, API keys, model tiers, Telegram setup, voice transcription, and your first agent
 - **AI-generated personas** — Describe what your agent should do; the system generates a persona with identity, boundaries, and domain expertise
 - **Web UI** — Next.js control plane for managing agents, settings, schedules, and activity feeds
 - **Working memory** — Persistent scratchpad per agent that remembers preferences, facts, and context across conversations
 - **Skills & MCP** — Extend agents with markdown skill modules or Model Context Protocol servers
+- **Dual LLM providers** — OpenRouter (pay-per-token, 300+ models) and Codex (ChatGPT Plus/Pro subscription, subject to fair-use quota). Configure during onboarding or add later in the Providers page
+- **Conversation tempo** — Agents are aware of elapsed time between messages and adapt their responses accordingly (greetings, context freshness, stale references)
+- **Smart recall** — Window-based message history loading with token budgets, replacing static message caps
 - **Phoenix observability** — OpenTelemetry tracing for debugging agent behavior
 
 <details>
@@ -66,7 +69,7 @@ Built on [Mastra](https://mastra.ai) + [Vercel AI SDK](https://ai-sdk.dev). Uses
 
 - macOS or Linux (Windows is not supported yet)
 - Node.js 20+
-- An [OpenRouter](https://openrouter.ai/keys) API key
+- An [OpenRouter](https://openrouter.ai/keys) API key and/or a ChatGPT Plus/Pro subscription (for Codex models)
 - A Telegram bot token (from [@BotFather](https://t.me/BotFather))
 
 
@@ -132,15 +135,17 @@ Telegram → Transport → Dedup → Chat classification
 
 Output processors run after each agent turn, before memory persistence:
 
-- **ImageStripper** — Strips base64 image data from conversation history
+- **ImageStripper** — Strips base64 image data from conversation history (including AI SDK v5 `experimental_attachments`)
 - **ReasoningStripper** — Removes encrypted LLM reasoning blocks
 - **GroupIdentity** — Tags agent responses in group chats
 
 Input processors run before each LLM step:
 
 - **ToolCallFilter** — Strips tool calls from recalled history
+- **MessageTimestamp** — Prepends `[N ago]` markers to recalled user messages for tempo awareness
 - **TokenLimiter** — Prevents context overflow
 - **ToolErrorGate** — Disables tools after repeated failures
+- **AsyncJobGuard** — Stops agent loop after async job dispatch
 
 ## Skills
 
@@ -210,7 +215,7 @@ bun test
 
 - **Runtime**: Node.js 20+ / TypeScript (ES modules)
 - **Agent Framework**: [Mastra](https://mastra.ai) (@mastra/core)
-- **LLM Gateway**: [OpenRouter](https://openrouter.ai) (300+ models)
+- **LLM Providers**: [OpenRouter](https://openrouter.ai) (300+ models) + [OpenAI Codex](https://openai.com/index/introducing-codex/) (ChatGPT subscription, fair-use quota)
 - **Messaging**: Telegram ([grammY](https://grammy.dev))
 - **Memory**: LibSQL (conversation + vectors + working memory)
 - **Storage**: SQLite (better-sqlite3)

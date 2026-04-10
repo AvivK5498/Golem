@@ -1,4 +1,5 @@
 import { createOpenRouter } from "@openrouter/ai-sdk-provider";
+import { createCodexModel } from "./codex-provider.js";
 
 // ---------------------------------------------------------------------------
 // Shared OpenRouter settings (typed by @openrouter/ai-sdk-provider)
@@ -9,9 +10,19 @@ type ReasoningEffort = "xhigh" | "high" | "medium" | "low" | "minimal" | "none";
 const DEFAULT_REASONING_EFFORT: ReasoningEffort =
   (process.env.DEFAULT_REASONING_EFFORT as ReasoningEffort) || "medium";
 
-// Provider routing: prefer fast providers, exclude data-training providers.
+// Provider routing: exclude data-training providers, and DON'T set an explicit
+// sort so that OpenRouter's Auto Exacto kicks in for tool-calling requests.
+//
+// Auto Exacto reorders providers using throughput + tool-call success rate +
+// benchmark data — only for requests that include tools. For non-tool requests
+// the default price-weighted routing applies. Setting an explicit `sort` here
+// would bypass Auto Exacto entirely.
+//
+// Note: a `default sort` in OpenRouter account preferences also bypasses
+// Auto Exacto. If Auto Exacto isn't kicking in, check that setting too.
+//
+// See: https://openrouter.ai/docs/guides/routing/auto-exacto
 const PROVIDER_ROUTING = {
-  sort: "throughput" as const,
   data_collection: "deny" as const,
 };
 
@@ -70,13 +81,29 @@ export function getMastraEmbedderId(): any {
 }
 
 /**
- * Build a LanguageModel for a specific OpenRouter model ID string.
- * Used by platform agent creation and sub-agent loader.
- * When fallbackModels is provided, OpenRouter tries them server-side.
- * When reasoningEffort is provided, it overrides the env/default.
+ * Build a LanguageModel for a specific model ID string.
+ *
+ * Provider routing is determined by the model ID prefix:
+ *   - "codex/<model>" → Codex provider (ChatGPT subscription via OAuth)
+ *   - everything else → OpenRouter (current default behavior)
+ *
+ * The Codex path bypasses OpenRouter entirely; it talks directly to
+ * chatgpt.com/backend-api with credentials managed by codex-auth-store.
+ *
+ * When fallbackModels is provided (OpenRouter only), OpenRouter tries them
+ * server-side. When reasoningEffort is provided, it overrides the env/default.
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function getModelForId(modelId: string, opts?: { fallbackModels?: string[]; reasoningEffort?: ReasoningEffort }): any {
+  // Codex provider — strip the prefix and dispatch to the new path.
+  // Pass through the per-agent reasoning effort so the existing UI dropdown
+  // applies to Codex agents the same way it does to OpenRouter agents.
+  if (modelId.startsWith("codex/")) {
+    const codexModelId = modelId.slice("codex/".length);
+    return createCodexModel(codexModelId, { reasoningEffort: opts?.reasoningEffort });
+  }
+
+  // Default: OpenRouter (unchanged)
   return getOpenRouterProvider()(modelId, {
     parallelToolCalls: true,
     reasoning: buildReasoning(opts?.reasoningEffort),
@@ -88,7 +115,9 @@ export function getModelForId(modelId: string, opts?: { fallbackModels?: string[
 
 /**
  * Get the nano model for lightweight utility tasks.
- * Sorts by price instead of throughput.
+ * Forces `sort: "price"` (cheapest provider) since nano calls are typically
+ * single-shot, no-tool, cost-sensitive operations — Auto Exacto and quality
+ * optimization don't matter here.
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function getNanoModel(): any {
