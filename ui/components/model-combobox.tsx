@@ -77,7 +77,12 @@ export function ModelCombobox({
                 )}
               >
                 <Check size={12} className={cn("shrink-0", value === m.id ? "opacity-100" : "opacity-0")} />
-                <span className="truncate">{m.id}</span>
+                <span className="truncate flex-1">{m.id}</span>
+                {m.provider === "codex" && (
+                  <span className="shrink-0 text-[9px] uppercase tracking-wide bg-[var(--brand)]/15 text-[var(--brand-text)] px-1.5 py-0.5 rounded">
+                    codex
+                  </span>
+                )}
               </button>
             ))}
           </div>

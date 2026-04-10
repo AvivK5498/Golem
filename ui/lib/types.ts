@@ -90,6 +90,12 @@ export interface OpenRouterModel {
   id: string;
   name: string;
   contextLength: number;
+  /**
+   * Routing provider for this model. "openrouter" = pay-per-token via OpenRouter.
+   * "codex" = ChatGPT subscription via OAuth (free under fair-use quota).
+   * Optional for backward compat with older API responses.
+   */
+  provider?: "openrouter" | "codex";
 }
 
 export interface SkillInfo {

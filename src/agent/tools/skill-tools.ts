@@ -132,11 +132,26 @@ export const sendMediaTool = createTool({
     "Use 'owner' to send to the user. Other contacts: name, phone number, or chat ID. " +
     "If contact is not found, falls back to the owner. Errors if owner is not configured.",
   inputSchema: z.object({
-    contact: z.string(),
-    file_path: z.string().optional(),
-    url: z.string().optional(),
-    caption: z.string().optional(),
-    type: z.enum(["image", "audio", "video", "document"]).optional(),
+    contact: z.string().describe(
+      "Recipient address. Use 'owner' to send to the platform owner (the user). " +
+      "Otherwise: a contact name, phone number, or chat ID. " +
+      "If the contact is not found, the tool falls back to the owner."
+    ),
+    file_path: z.string().optional().describe(
+      "Absolute local filesystem path to the media file. " +
+      "Mutually exclusive with `url` — provide one or the other, not both."
+    ),
+    url: z.string().optional().describe(
+      "Remote URL to download the media from before sending. " +
+      "Mutually exclusive with `file_path` — provide one or the other, not both."
+    ),
+    caption: z.string().optional().describe(
+      "Optional caption text shown alongside the media in the chat client. Plain text."
+    ),
+    type: z.enum(["image", "audio", "video", "document"]).optional().describe(
+      "Override the auto-detected media type. Auto-detected from MIME if omitted; " +
+      "only set when the auto-detection picks the wrong type."
+    ),
   }),
   inputExamples: [
     { input: { contact: "owner", file_path: "/tmp/generated-image.png", caption: "Here is your image" } },

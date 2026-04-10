@@ -19,6 +19,8 @@
 import type { Processor } from "@mastra/core/processors";
 import type { MastraDBMessage } from "@mastra/core/memory";
 
+const IMAGE_PLACEHOLDER = "[Image was shared and processed by the model]";
+
 export class ImageStripperProcessor implements Processor {
   id = "image-stripper";
 
@@ -28,41 +30,76 @@ export class ImageStripperProcessor implements Processor {
       const content = msg.content as any;
       if (!content || typeof content !== "object") return msg;
 
-      // Format 1: structured with parts array { format: 2, parts: [...] }
-      if (Array.isArray(content.parts)) {
-        let changed = false;
-        const newParts = content.parts.map((part: { type?: string; data?: string; mimeType?: string }) => {
-          if (part.type === "file" && part.data && part.data.length > 1000) {
-            changed = true;
-            return { type: "text", text: "[Image was shared and processed by the model]" };
-          }
-          if (part.type === "image" && part.data && part.data.length > 1000) {
-            changed = true;
-            return { type: "text", text: "[Image was shared and processed by the model]" };
-          }
-          return part;
-        });
-        if (changed) {
-          return { ...msg, content: { ...content, parts: newParts } } as MastraDBMessage;
-        }
-      }
-
-      // Format 2: direct array of content objects
+      // Format 2: direct array of content objects (AI SDK input format)
       if (Array.isArray(content)) {
         let changed = false;
         const newContent = content.map((part: { type?: string; image?: unknown; data?: string }) => {
           if ((part.type === "image" || part.type === "file") && (part.image || (part.data && part.data.length > 1000))) {
             changed = true;
-            return { type: "text", text: "[Image was shared and processed by the model]" };
+            return { type: "text", text: IMAGE_PLACEHOLDER };
           }
           return part;
         });
         if (changed) {
           return { ...msg, content: newContent } as unknown as MastraDBMessage;
         }
+        return msg;
       }
 
-      return msg;
+      // Format 1 + Format 3: object form — may contain `parts` (file parts),
+      // `experimental_attachments` (AI SDK v5 persisted attachments), or both.
+      // We strip both into the same placeholder text so recalled history is
+      // identical regardless of how the image originally entered memory.
+      let changed = false;
+      let newContent = content;
+
+      // Strip file/image parts → placeholder text
+      if (Array.isArray(content.parts)) {
+        let partsChanged = false;
+        const newParts = content.parts.map((part: { type?: string; data?: string; mimeType?: string }) => {
+          if ((part.type === "file" || part.type === "image") && part.data && part.data.length > 1000) {
+            partsChanged = true;
+            return { type: "text", text: IMAGE_PLACEHOLDER };
+          }
+          return part;
+        });
+        if (partsChanged) {
+          changed = true;
+          newContent = { ...newContent, parts: newParts };
+        }
+      }
+
+      // Strip experimental_attachments carrying base64 data URLs. Mastra
+      // persists these alongside `parts`, and on recall it rebuilds them as
+      // file parts in the LLM input — defeating the parts-side strip above
+      // unless we also clear them here.
+      if (Array.isArray(content.experimental_attachments)) {
+        const orig = content.experimental_attachments;
+        const kept = orig.filter((att: { url?: string }) =>
+          !att?.url || !att.url.startsWith("data:") || att.url.length <= 1000
+        );
+        if (kept.length !== orig.length) {
+          changed = true;
+          // Ensure the parts array surfaces the placeholder text so the agent
+          // still sees the image signal in conversation history.
+          const basisParts = Array.isArray(newContent.parts) ? newContent.parts : [];
+          const hasPlaceholder = basisParts.some(
+            (p: { type?: string; text?: string }) => p?.type === "text" && p.text === IMAGE_PLACEHOLDER,
+          );
+          const partsWithPlaceholder = hasPlaceholder
+            ? basisParts
+            : [{ type: "text", text: IMAGE_PLACEHOLDER }, ...basisParts];
+          const next = { ...newContent, parts: partsWithPlaceholder };
+          if (kept.length > 0) {
+            next.experimental_attachments = kept;
+          } else {
+            delete next.experimental_attachments;
+          }
+          newContent = next;
+        }
+      }
+
+      return changed ? ({ ...msg, content: newContent } as MastraDBMessage) : msg;
     });
   }
 

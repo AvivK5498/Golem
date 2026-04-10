@@ -44,6 +44,7 @@
     "prepare": "husky"
   },
   "dependencies": {
+    "@mariozechner/pi-ai": "^0.66.1",
     "@mastra/arize": "^1.0.9",
     "@mastra/core": "^1.15.0",
     "@mastra/libsql": "^1.7.2",
@@ -59,6 +60,7 @@
     "cron-parser": "^5.5.0",
     "dotenv": "^16.4.0",
     "grammy": "^1.41.1",
+    "js-tiktoken": "^1.0.21",
     "sharp": "^0.34.5",
     "tsx": "^4.19.0",
     "yaml": "^2.8.2",

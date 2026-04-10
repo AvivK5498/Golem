@@ -47,6 +47,14 @@ export const SETTINGS_KEYS = {
   MEMORY_OBSERVATIONAL_SCOPE: "memory.observational.scope",
   MEMORY_WORKING_MEMORY_ENABLED: "memory.workingMemory.enabled",
   MEMORY_WORKING_MEMORY_SCOPE: "memory.workingMemory.scope",
+  // Smart recall (window-aware lastMessages with min/max + token cap)
+  MEMORY_SMART_RECALL_ENABLED: "memory.smartRecall.enabled",
+  MEMORY_SMART_RECALL_WINDOW_DAYS: "memory.smartRecall.windowDays",
+  MEMORY_SMART_RECALL_MIN: "memory.smartRecall.minMessages",
+  MEMORY_SMART_RECALL_MAX: "memory.smartRecall.maxMessages",
+  MEMORY_SMART_RECALL_MAX_TOKENS: "memory.smartRecall.maxTokens",
+  // Conversation tempo awareness
+  MEMORY_TEMPO_ENABLED: "memory.tempo.enabled",
 
   // Access control
   ALLOWED_GROUPS: "allowedGroups",
@@ -230,6 +238,40 @@ export class AgentSettings {
 
   getWorkingMemoryScope(agentId: string): string | null {
     return this.store.get(agentId, SETTINGS_KEYS.MEMORY_WORKING_MEMORY_SCOPE);
+  }
+
+  /**
+   * Smart-recall config — returns null when disabled (caller should fall back
+   * to the static `lastMessages` cap). When enabled, all four fields have
+   * sensible defaults so the caller never needs to handle missing values.
+   *
+   * `maxTokens` of 0 (or unset) means "no token cap" — only message-count
+   * limits apply.
+   */
+  getSmartRecallConfig(agentId: string): {
+    windowDays: number;
+    min: number;
+    max: number;
+    maxTokens?: number;
+  } | null {
+    const enabled = this.getBool(agentId, SETTINGS_KEYS.MEMORY_SMART_RECALL_ENABLED);
+    if (!enabled) return null;
+    const windowDays = this.getNumber(agentId, SETTINGS_KEYS.MEMORY_SMART_RECALL_WINDOW_DAYS) ?? 3;
+    const min = this.getNumber(agentId, SETTINGS_KEYS.MEMORY_SMART_RECALL_MIN) ?? 12;
+    const max = this.getNumber(agentId, SETTINGS_KEYS.MEMORY_SMART_RECALL_MAX) ?? 40;
+    const maxTokensRaw = this.getNumber(agentId, SETTINGS_KEYS.MEMORY_SMART_RECALL_MAX_TOKENS);
+    return {
+      windowDays,
+      min,
+      max,
+      ...(maxTokensRaw && maxTokensRaw > 0 ? { maxTokens: maxTokensRaw } : {}),
+    };
+  }
+
+  /** Tempo awareness toggle. Defaults to true (enabled) when unset. */
+  getTempoEnabled(agentId: string): boolean {
+    const v = this.getBool(agentId, SETTINGS_KEYS.MEMORY_TEMPO_ENABLED);
+    return v === null ? true : v;
   }
 
   // ── Access control ──────────────────────────────────────

@@ -353,10 +353,17 @@ export function loadSubAgents(
 
     if (needsWorkspace) {
       const readOnly = !hasWorkspaceWrite;
+      // If any configured skill lives outside the project root (e.g. when
+      // GOLEM_SKILLS_DIR points at an external dir like ~/golem-data/skills),
+      // Mastra's containment check rejects it with a permission error and the
+      // skill loads as empty. Disable containment in that case so the
+      // filesystem can reach the external skill directory — mirrors the
+      // platform-agent path in platform.ts.
+      const hasExternalSkills = hasSkills && skillPaths.some(p => !p.startsWith(process.cwd()));
       agentOptions.workspace = new Workspace({
         id: `sub-${id}-workspace`,
         name: `${id} workspace`,
-        filesystem: new LocalFilesystem({ basePath: process.cwd(), contained: true, readOnly }),
+        filesystem: new LocalFilesystem({ basePath: process.cwd(), contained: !hasExternalSkills, readOnly }),
         skills: hasSkills ? skillPaths : undefined,
         bm25: hasSkills,
       });
