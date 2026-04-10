@@ -62,6 +62,7 @@ import { ImageStripperProcessor } from "../agent/processors/image-stripper-proce
 import { ReasoningStripperProcessor } from "../agent/processors/reasoning-stripper-processor.js";
 import { ToolErrorGate } from "../agent/processors/tool-error-gate.js";
 import { AsyncJobGuard } from "../agent/processors/async-job-guard.js";
+import { MessageTimestampProcessor } from "../agent/processors/message-timestamp-processor.js";
 import { setAllowedBinaries } from "../agent/tools/run-command-tool.js";
 import fs from "node:fs";
 import path from "node:path";
@@ -350,6 +351,8 @@ function createPlatformAgent(params: {
       });
       const rChatType = requestContext?.get("chatType") as string | undefined;
       const isGroup = rChatType === "group";
+      const tempo = requestContext?.get("memoryTempo") as string | undefined;
+      const tempoBand = requestContext?.get("memoryTempoBand") as "active" | "recent" | "stale" | "cold" | undefined;
       const behavior = agentSettings.getBehavior(config.id);
       const promptSections = buildPlatformPromptSections({
         agentName: config.name,
@@ -359,6 +362,8 @@ function createPlatformAgent(params: {
         lastMessages: agentSettings.getLastMessages(config.id) ?? 12,
         isGroup,
         behavior,
+        ...(tempo && { tempoSincePreviousUserMessage: tempo }),
+        ...(tempoBand && { tempoBand }),
       });
       const persona = registry.getPersona(config.id) || "";
       const lines: string[] = [`Current time: ${now} (Asia/Jerusalem)`];
@@ -453,6 +458,7 @@ For single sub-agent tasks, skip the handoff file.`;
       new ImageStripperProcessor(),       // Strip base64 images from recalled history
       new AsyncJobGuard(),              // Stop loop after async job dispatch (e.g., coding agent)
       new ToolCallFilter(),             // Strip tool calls/results from recalled history (saves tokens)
+      new MessageTimestampProcessor(),  // Prepend [N ago] markers to historical user messages (gated by tempo setting)
       new TokenLimiterProcessor(170_000), // Prevent context overflow
       new ToolErrorGate(),              // Strip tools after repeated errors to force synthesis
     ],
@@ -975,6 +981,7 @@ export async function startPlatform(): Promise<PlatformContext> {
         jobQueue,
         settingsStore,
         agentSettings,
+        memory,
       });
       runners.set(config.id, runner);
       registerAgentTransport(runner, transport, config, { cronStore, feedStore, jobQueue, registry, agentStore, transports, runners, agentSettings });
