@@ -1173,6 +1173,8 @@ export default function AgentEditPage({ params }: { params: Promise<{ id: string
   const [wmEnabled, setWmEnabled] = useState(true);
   const [wmScope, setWmScope] = useState("resource");
   const [memoryTemplate, setMemoryTemplate] = useState("");
+  const [workingMemoryContent, setWorkingMemoryContent] = useState("");
+  const [workingMemoryLoading, setWorkingMemoryLoading] = useState(false);
   // Smart recall (window-aware lastMessages with min/max + token cap)
   const [smartRecallEnabled, setSmartRecallEnabled] = useState(false);
   const [smartRecallWindowDays, setSmartRecallWindowDays] = useState(3);
@@ -1264,6 +1266,14 @@ export default function AgentEditPage({ params }: { params: Promise<{ id: string
   // `settingsData` so that whichever fetch resolves last still produces a
   // correct override-toggle state. settings.db with an empty string means
   // "no override" (use the active tier); a non-empty value means override.
+  // Auto-load working memory when the memory tab becomes active
+  useEffect(() => {
+    if (tab === "memory" && !workingMemoryContent && !workingMemoryLoading) {
+      loadWorkingMemory();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab]);
+
   useEffect(() => {
     if (!data) return;
     const c = data.config;
@@ -1460,6 +1470,44 @@ export default function AgentEditPage({ params }: { params: Promise<{ id: string
     });
     if (res.ok) toast.success("Saved -- restart to apply");
     else toast.error(`Failed to save ${type}`);
+  }
+
+  async function loadWorkingMemory() {
+    setWorkingMemoryLoading(true);
+    try {
+      const res = await fetch(`/api/platform/agents/${id}/working-memory`);
+      if (res.ok) {
+        const data = await res.json();
+        setWorkingMemoryContent(data.content || "");
+      } else {
+        const err = await res.json();
+        toast.error(`Failed to load: ${err.error || res.statusText}`);
+      }
+    } catch (err) {
+      toast.error(`Failed to load working memory`);
+    } finally {
+      setWorkingMemoryLoading(false);
+    }
+  }
+
+  async function saveWorkingMemory() {
+    setWorkingMemoryLoading(true);
+    try {
+      const res = await fetch(`/api/platform/agents/${id}/working-memory`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ content: workingMemoryContent }),
+      });
+      if (res.ok) toast.success("Working memory updated");
+      else {
+        const err = await res.json();
+        toast.error(`Failed to save: ${err.error || res.statusText}`);
+      }
+    } catch (err) {
+      toast.error(`Failed to save working memory`);
+    } finally {
+      setWorkingMemoryLoading(false);
+    }
   }
 
   async function saveSetting(key: string, value: unknown) {
@@ -1927,6 +1975,35 @@ export default function AgentEditPage({ params }: { params: Promise<{ id: string
                     <Button onClick={() => saveMarkdown("memory-template", memoryTemplate)} size="sm">Save Template</Button>
                   </CardContent>
                 </Card>
+
+                <Card size="sm">
+                  <CardHeader className="border-b">
+                    <div className="flex items-center justify-between">
+                      <CardTitle className="text-xs">Working Memory (live)</CardTitle>
+                      <span className="text-[9px] text-muted-foreground">picked up on next turn</span>
+                    </div>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    <p className="text-[10px] text-muted-foreground">
+                      Current working memory content for this agent. Edit to correct facts, trim stale data, or manually update what the agent knows. Changes apply on the agent&apos;s next turn — no restart needed.
+                    </p>
+                    <AutoTextarea
+                      value={workingMemoryContent}
+                      onChange={e => setWorkingMemoryContent(e.target.value)}
+                      minRows={6}
+                      maxHeight={500}
+                      className="font-mono text-[11px]"
+                      placeholder={workingMemoryLoading ? "Loading..." : "Working memory is empty — the agent hasn't written anything yet."}
+                    />
+                    <div className="flex items-center gap-2">
+                      <Button onClick={saveWorkingMemory} size="sm" disabled={workingMemoryLoading}>Save</Button>
+                      <Button onClick={loadWorkingMemory} size="sm" variant="outline" disabled={workingMemoryLoading}>Refresh</Button>
+                      <span className="text-[9px] text-muted-foreground font-mono tabular-nums">
+                        {workingMemoryContent.length} chars
+                      </span>
+                    </div>
+                  </CardContent>
+                </Card>
               </>
             )}
 
@@ -2292,6 +2369,57 @@ export default function AgentEditPage({ params }: { params: Promise<{ id: string
                           />
                           <span className="text-[10px] text-muted-foreground">Working Memory</span>
                         </label>
+                      </CardContent>
+                    </Card>
+
+                    <Separator />
+
+                    {/* Browser */}
+                    <Card size="sm">
+                      <CardHeader className="border-b">
+                        <div className="flex items-center gap-2">
+                          <CardTitle className="text-xs">Browser</CardTitle>
+                          <Badge variant="outline" className="text-[9px] border-border">restart</Badge>
+                        </div>
+                      </CardHeader>
+                      <CardContent className="space-y-2">
+                        <label className="flex items-center gap-2 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={settingsData["browser.enabled"] === "true"}
+                            onChange={e => saveSetting("browser.enabled", e.target.checked)}
+                            className="rounded border-border bg-accent accent-teal-500"
+                          />
+                          <span className="text-[10px] text-muted-foreground">Enable browser automation</span>
+                        </label>
+                        <p className="text-[10px] text-muted-foreground/60">
+                          Adds 16 browser tools for web navigation, form filling, and data extraction.
+                        </p>
+                        {settingsData["browser.enabled"] === "true" && (
+                          <div className="space-y-1.5 pt-1">
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-[10px] text-muted-foreground font-medium">CDP URL</span>
+                              <span
+                                className="text-[9px] text-muted-foreground/50 cursor-help"
+                                title="Connect to your own browser instead of headless Chrome. Launch your browser with --remote-debugging-port=9222, then enter http://localhost:9222 here. The agent will use your existing sessions, cookies, and auth."
+                              >&#9432;</span>
+                            </div>
+                            <input
+                              defaultValue={settingsData["browser.cdpUrl"] || ""}
+                              onBlur={e => {
+                                const v = e.target.value.trim();
+                                if (v && !/^https?:\/\/.+:\d+/.test(v)) {
+                                  toast.error("CDP URL must be an HTTP address (e.g. http://localhost:9222)");
+                                  return;
+                                }
+                                saveSetting("browser.cdpUrl", v);
+                              }}
+                              onKeyDown={e => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
+                              placeholder="http://localhost:9222 (leave blank for headless)"
+                              className="w-full bg-muted border border-border rounded-md px-2 py-1 font-mono text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                            />
+                          </div>
+                        )}
                       </CardContent>
                     </Card>
 

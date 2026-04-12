@@ -47,12 +47,26 @@ export class TransportManager {
 
   /** Connect all transports in parallel. One failure doesn't block others. */
   async connectAll(): Promise<void> {
+    const MAX_RETRIES = 3;
     const entries = [...this.transports.entries()];
     const results = await Promise.allSettled(
       entries.map(async ([agentId, transport]) => {
-        await transport.connect();
-        console.log(`[transport] agent "${agentId}" connected`);
-        logger.info(`transport connected`, { agent: agentId, transport: "telegram" });
+        for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+          try {
+            await transport.connect();
+            console.log(`[transport] agent "${agentId}" connected`);
+            logger.info(`transport connected`, { agent: agentId, transport: "telegram" });
+            return;
+          } catch (err) {
+            if (attempt < MAX_RETRIES) {
+              const delayMs = 2000 * Math.pow(2, attempt); // 2s, 4s, 8s
+              console.warn(`[transport] agent "${agentId}" connect failed (attempt ${attempt + 1}/${MAX_RETRIES + 1}), retrying in ${delayMs / 1000}s...`);
+              await new Promise(r => setTimeout(r, delayMs));
+            } else {
+              throw err;
+            }
+          }
+        }
       }),
     );
 
@@ -60,10 +74,10 @@ export class TransportManager {
       if (result.status === "rejected") {
         const agentId = entries[i][0];
         console.error(
-          `[transport] agent "${agentId}" connection failed:`,
+          `[transport] agent "${agentId}" connection failed after ${MAX_RETRIES + 1} attempts:`,
           result.reason,
         );
-        logger.error(`transport connection failed: ${result.reason}`, { agent: agentId, transport: "telegram" });
+        logger.error(`transport connection failed after retries: ${result.reason}`, { agent: agentId, transport: "telegram" });
       }
     }
   }

@@ -5,6 +5,7 @@ import path from "node:path";
 import YAML from "yaml";
 import { parseFrontmatter } from "../../skills/loader.js";
 import { guessMimeType, detectMediaType } from "../tool-utils.js";
+import { unwrapService } from "../../platform/agent-runner.js";
 import type { MessageTransport, ChatAddress } from "../../transport/index.js";
 
 // ---------------------------------------------------------------------------
@@ -158,7 +159,7 @@ export const sendMediaTool = createTool({
     { input: { contact: "owner", url: "https://example.com/video.mp4", type: "video" } },
   ],
   execute: async (input, context) => {
-    const transport = context?.requestContext?.get("transport" as never) as unknown as MessageTransport;
+    const transport = unwrapService<MessageTransport>(context?.requestContext?.get("transport" as never))!;
     const ownerAddr = context?.requestContext?.get("ownerAddress" as never) as ChatAddress | undefined;
     const { address, name: contactName } = resolveAddress(transport, input.contact, ownerAddr);
 

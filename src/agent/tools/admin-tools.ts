@@ -3,6 +3,7 @@ import { z } from "zod";
 import fs from "node:fs";
 import path from "node:path";
 import { dataPath } from "../../utils/paths.js";
+import { unwrapService } from "../../platform/agent-runner.js";
 import type { JobQueue } from "../../scheduler/job-queue.js";
 import type { MessageTransport } from "../../transport/index.js";
 
@@ -155,7 +156,7 @@ export const scheduleJobTool = createTool({
     maxAttempts: z.number().optional().default(2).describe("Retry attempts on failure (default: 2)"),
   }),
   execute: async (input, context) => {
-    const jobQueue = context?.requestContext?.get("jobQueue" as never) as unknown as JobQueue | undefined;
+    const jobQueue = unwrapService<JobQueue>(context?.requestContext?.get("jobQueue" as never));
     if (!jobQueue) {
       return "Error: Job system not initialized. Cannot enqueue background jobs.";
     }
@@ -165,7 +166,7 @@ export const scheduleJobTool = createTool({
       return "Error: target_jid is required for background jobs";
     }
 
-    const transport = context?.requestContext?.get("transport" as never) as unknown as MessageTransport | undefined;
+    const transport = unwrapService<MessageTransport>(context?.requestContext?.get("transport" as never));
     const platform = transport?.platform || "telegram";
     const agentId = context?.requestContext?.get("agentId" as never) as unknown as string || "unknown";
 

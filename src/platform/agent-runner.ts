@@ -21,12 +21,27 @@ import fs from "node:fs";
 import { buildMemoryScope } from "../agent/memory-scope.js";
 import { classifyChat } from "../agent/filter.js";
 import type { ChatType } from "../agent/filter.js";
+import { RequestContext } from "@mastra/core/request-context";
 import { getModelForId } from "../agent/model.js";
 import { getConversationTempo, formatElapsedHuman, categorizeTempo, computeSmartLastMessages } from "../memory/smart-recall.js";
 import { logger } from "../utils/external-logger.js";
 import { isTransientApiError } from "../utils/api-errors.js";
 
 const FALLBACK_MODEL = process.env.FALLBACK_MODEL || "openai/gpt-4.1-mini";
+
+/**
+ * Unwrap a shielded service reference from requestContext.
+ * Services are wrapped in { _ref, serializeForSpan } to prevent Mastra 1.24's
+ * observability deepClean from triggering grammY Proxy traps (which turn
+ * property access into Telegram HTTP calls). Tools call this to get the real ref.
+ */
+export function unwrapService<T>(val: unknown): T | undefined {
+  if (!val) return undefined;
+  if (typeof val === "object" && "_ref" in (val as Record<string, unknown>)) {
+    return (val as { _ref: T })._ref;
+  }
+  return val as T; // backward compat: unshielded value
+}
 
 // ── Public interfaces ────────────────────────────────────────
 
@@ -168,21 +183,29 @@ export class AgentRunner {
 
     const { getAgentWorkspace } = await import("../utils/paths.js");
 
-    const requestContext = new Map<string, unknown>();
+    const requestContext = new RequestContext();
     requestContext.set("agentId", agentId);
     requestContext.set("repoPath", getAgentWorkspace(agentId));
     requestContext.set("chatType", chatType);
     requestContext.set("promptMode", promptMode);
     requestContext.set("jid", chatId);
-    requestContext.set("cronStore", this.cronStore);
-    requestContext.set("transport", this.transport);
+    // Mastra 1.24's observability deepClean traverses every object in
+    // RequestContext and accesses .serializeForSpan on each one. grammY's Bot
+    // API uses a Proxy that turns ANY property access into a Telegram HTTP
+    // call — accessing .serializeForSpan triggers a 404 and crashes.
+    // Wrap service refs in a plain object with serializeForSpan + a _ref
+    // getter. Tools call .get("transport")._ref to get the real object.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const shield = (val: any) => ({ _ref: val, serializeForSpan: () => "[service]" });
+    requestContext.set("cronStore", shield(this.cronStore));
+    requestContext.set("transport", shield(this.transport));
     requestContext.set("ownerAddress", {
       platform: "telegram" as const,
       id: String(this.config.transport.ownerId),
     });
-    if (this.jobQueue) requestContext.set("jobQueue", this.jobQueue);
-    if (this.settingsStore) requestContext.set("settingsStore", this.settingsStore);
-    if (this.agentSettings) requestContext.set("agentSettings", this.agentSettings);
+    if (this.jobQueue) requestContext.set("jobQueue", shield(this.jobQueue));
+    if (this.settingsStore) requestContext.set("settingsStore", shield(this.settingsStore));
+    if (this.agentSettings) requestContext.set("agentSettings", shield(this.agentSettings));
     // Tiers are global — resolved from settings
     const globalTiers = this.agentSettings?.getGlobalTiers();
     if (globalTiers) requestContext.set("modelTiers", globalTiers);

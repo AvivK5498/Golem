@@ -851,17 +851,17 @@ export function startServer(deps: ServerDeps) {
       const all = deps.agentSettings.getAll(agentId);
       const obj: Record<string, string> = {};
       for (const [k, v] of all) obj[k] = v;
-      // Compute resolved model from active tier + tiers map
+      // Compute resolved model: override > tier > fallback
       const activeTier = obj["model_tier"] || null;
-      const baseModel = obj["llm.model"] || "";
-      let resolvedModel = baseModel;
-      if (activeTier && activeTier !== "default" && obj["llm.tiers"]) {
+      const override = obj["llm.model"] || "";
+      let resolvedModel = override;
+      if (!resolvedModel && activeTier && activeTier !== "default" && obj["llm.tiers"]) {
         try {
           const tiers = JSON.parse(obj["llm.tiers"]);
           if (tiers[activeTier]) resolvedModel = tiers[activeTier];
-        } catch { /* use base model */ }
+        } catch { /* use tier fallback */ }
       }
-      obj["_resolvedModel"] = resolvedModel;
+      obj["_resolvedModel"] = resolvedModel || "unknown";
       return json(res, obj);
     }
 
@@ -1282,10 +1282,11 @@ Example 3 — Study Tutor:
             const agentId = cfg.id || row.id;
             const connected = !!deps.transports?.get(agentId);
             const cronCount = deps.cronStore ? deps.cronStore.listCrons(agentId).length : 0;
-            // Resolve: override > tier > legacy model > unknown
+            // Resolve: override (settings.db) > tier > legacy model > unknown
             const agentGlobalTiers = deps.agentSettings?.getGlobalTiers() || {};
             const agentTierKey = deps.agentSettings?.getActiveTier(agentId) || cfg.llm?.tier || "low";
-            const model = cfg.llm?.override || agentGlobalTiers[agentTierKey] || cfg.llm?.model || "unknown";
+            const settingsOverride = deps.agentSettings?.getModel(agentId);
+            const model = settingsOverride || cfg.llm?.override || agentGlobalTiers[agentTierKey] || cfg.llm?.model || "unknown";
 
             const warnings: string[] = [];
             const resolvedToken = expandEnvVars(cfg.transport?.botToken || "");
@@ -1453,6 +1454,45 @@ Example 3 — Study Tutor:
         }
         return json(res, { ok: true });
       } catch (err) { return json(res, { error: String(err) }, 400); }
+    }
+
+    // Live working memory — read/write the resource-scoped WM blob in platform-memory.db
+    const workingMemoryMatch = pathname.match(/^\/api\/platform\/agents\/([a-z0-9-]+)\/working-memory$/);
+    if (workingMemoryMatch && deps.agentStore) {
+      const id = workingMemoryMatch[1];
+      const cfg = deps.agentStore.getConfig(id);
+      if (!cfg) return json(res, { error: "Agent not found" }, 404);
+      // Resource ID format from buildMemoryScope: `{agentId}-{platform}:{ownerId}`
+      const ownerId = cfg.transport?.ownerId;
+      const platform = cfg.transport?.platform || "telegram";
+      if (!ownerId) return json(res, { error: "Agent has no ownerId configured" }, 400);
+      const resourceId = `${id}-${platform}:${ownerId}`;
+      try {
+        const Database = (await import("better-sqlite3")).default;
+        const db = new Database(dataPath("platform-memory.db"), { readonly: req.method === "GET" });
+        try {
+          if (req.method === "GET") {
+            const row = db.prepare("SELECT workingMemory FROM mastra_resources WHERE id = ?").get(resourceId) as { workingMemory: string | null } | undefined;
+            return json(res, { resourceId, content: row?.workingMemory ?? "" });
+          }
+          if (req.method === "PUT") {
+            const body = await readBody(req);
+            const { content } = JSON.parse(body);
+            if (typeof content !== "string") return json(res, { error: "content must be a string" }, 400);
+            const existing = db.prepare("SELECT id FROM mastra_resources WHERE id = ?").get(resourceId);
+            if (existing) {
+              db.prepare("UPDATE mastra_resources SET workingMemory = ?, updatedAt = CURRENT_TIMESTAMP WHERE id = ?").run(content, resourceId);
+            } else {
+              db.prepare("INSERT INTO mastra_resources (id, workingMemory, metadata, createdAt, updatedAt) VALUES (?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)").run(resourceId, content, "{}");
+            }
+            return json(res, { ok: true });
+          }
+        } finally {
+          db.close();
+        }
+      } catch (err) {
+        return json(res, { error: err instanceof Error ? err.message : String(err) }, 500);
+      }
     }
 
     // Update sub-agents

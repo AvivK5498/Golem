@@ -1,4 +1,5 @@
 import type { RequestContext } from "@mastra/core/request-context";
+import { unwrapService } from "../platform/agent-runner.js";
 import type { MessageTransport } from "../transport/index.js";
 import type { ChatAddress } from "../transport/types.js";
 import fs from "node:fs";
@@ -153,7 +154,7 @@ export async function requestToolApproval(params: {
     return `Approval already requested (${existingApprovalId}). Stop and wait for the user to approve or deny.`;
   }
 
-  const transport = requestContext.get("transport" as never) as MessageTransport | undefined;
+  const transport = unwrapService<MessageTransport>(requestContext.get("transport" as never));
   const jid = requestContext.get("jid" as never) as string | undefined;
   if (!transport || !jid) {
     return null;

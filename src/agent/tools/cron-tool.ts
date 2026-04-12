@@ -3,6 +3,7 @@ import { createTool } from "@mastra/core/tools";
 import { z } from "zod";
 import fs from "node:fs";
 import { dataPath } from "../../utils/paths.js";
+import { unwrapService } from "../../platform/agent-runner.js";
 import type { CronStore } from "../../scheduler/cron-store.js";
 
 // Module-level fallback for sub-agents that don't have cronStore in requestContext
@@ -86,10 +87,10 @@ export const cronTool = createTool({
   ],
   execute: async (input, context) => {
 
-    const cronStore = (context?.requestContext?.get("cronStore" as never) as unknown as CronStore | undefined) || globalCronStore;
+    const cronStore = unwrapService<CronStore>(context?.requestContext?.get("cronStore" as never)) || globalCronStore;
     if (!cronStore) return "Cron scheduling is not available.";
     const callerJid = context?.requestContext?.get("jid" as never) as unknown as string | undefined;
-    const transport = context?.requestContext?.get("transport" as never) as unknown as { platform?: string } | undefined;
+    const transport = unwrapService<{ platform?: string }>(context?.requestContext?.get("transport" as never));
     const agentId = context?.requestContext?.get("agentId" as never) as unknown as string;
     if (!agentId) return "Error: agent identity not available in request context. Cannot manage crons.";
 

@@ -56,6 +56,10 @@ export const SETTINGS_KEYS = {
   // Conversation tempo awareness
   MEMORY_TEMPO_ENABLED: "memory.tempo.enabled",
 
+  // Browser
+  BROWSER_ENABLED: "browser.enabled",
+  BROWSER_CDP_URL: "browser.cdpUrl",
+
   // Access control
   ALLOWED_GROUPS: "allowedGroups",
   ADMIN_GROUPS: "adminGroups",
@@ -218,6 +222,14 @@ export class AgentSettings {
 
   getSemanticRecall(agentId: string): boolean | null {
     return this.getBool(agentId, SETTINGS_KEYS.MEMORY_SEMANTIC_RECALL);
+  }
+
+  getBrowserEnabled(agentId: string): boolean | null {
+    return this.getBool(agentId, SETTINGS_KEYS.BROWSER_ENABLED);
+  }
+
+  getBrowserCdpUrl(agentId: string): string | null {
+    return this.store.get(agentId, SETTINGS_KEYS.BROWSER_CDP_URL);
   }
 
   getObservationalEnabled(agentId: string): boolean | null {
