@@ -4,6 +4,7 @@ import type { CodingSessionManager } from "./session-manager.js";
 import type { ProgressCallback } from "./runtime.js";
 import type { JobQueue } from "../scheduler/job-queue.js";
 import type { MessageTransport } from "../transport/interface.js";
+import { unwrapService } from "../platform/agent-runner.js";
 
 let sessionManager: CodingSessionManager | null = null;
 let progressSender: ProgressCallback | null = null;
@@ -65,11 +66,11 @@ export const codeAgentTool = createTool({
     console.log(`[coding] resolved cwd=${cwd}, model=${model}`);
 
     // Try async dispatch via job queue
-    const jobQueue = context?.requestContext?.get("jobQueue" as never) as unknown as JobQueue | undefined;
+    const jobQueue = unwrapService<JobQueue>(context?.requestContext?.get("jobQueue" as never));
     if (jobQueue) {
       const targetJid = context?.requestContext?.get("jid" as never) as unknown as string | undefined;
       if (!targetJid) return "Error: target_jid is required for async coding tasks";
-      const transport = context?.requestContext?.get("transport" as never) as unknown as MessageTransport | undefined;
+      const transport = unwrapService<MessageTransport>(context?.requestContext?.get("transport" as never));
       const platform = transport?.platform || "telegram";
 
       const eventSource = context?.requestContext?.get("eventSource" as never) as unknown as string | undefined;

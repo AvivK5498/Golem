@@ -1,6 +1,7 @@
 import { createTool } from "@mastra/core/tools";
 import { z } from "zod";
 import { requestToolApproval } from "../tool-approvals.js";
+import { unwrapService } from "../../platform/agent-runner.js";
 import type { AgentSettings } from "../../platform/agent-settings.js";
 
 // ---------------------------------------------------------------------------
@@ -119,7 +120,7 @@ export const configUpdateTool = createTool({
     { input: { action: "apply", key: "global.whisper.enabled", value: false } },
   ],
   execute: async (input, context) => {
-    const agentSettings = context?.requestContext?.get("agentSettings" as never) as unknown as AgentSettings | undefined;
+    const agentSettings = unwrapService<AgentSettings>(context?.requestContext?.get("agentSettings" as never));
     if (!agentSettings) {
       return "Error: AgentSettings not available in tool context. Cannot read/write platform settings.";
     }

@@ -1,5 +1,6 @@
 import { createTool } from "@mastra/core/tools";
 import { z } from "zod/v4";
+import { unwrapService } from "../../platform/agent-runner.js";
 import type { SettingsStore } from "../../scheduler/settings-store.js";
 
 export const MODEL_TIER_SETTING_KEY = "model_tier";
@@ -13,7 +14,7 @@ export const switchModelTool = createTool({
     tier: z.string().describe('The tier name to switch to (e.g., "low", "med", "high"). Use "default" to reset to the configured default.'),
   }),
   execute: async (input, context) => {
-    const settingsStore = context?.requestContext?.get("settingsStore" as never) as unknown as SettingsStore | undefined;
+    const settingsStore = unwrapService<SettingsStore>(context?.requestContext?.get("settingsStore" as never));
     if (!settingsStore) return "Error: settings store not available.";
 
     const agentId = context?.requestContext?.get("agentId" as never) as unknown as string;

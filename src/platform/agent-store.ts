@@ -174,10 +174,37 @@ export class AgentStore {
     } catch { return null; }
   }
 
-  /** Update just the config JSON for an agent. */
-  updateConfig(id: string, config: AgentRegistryConfig): void {
+  /**
+   * Update the config JSON for an agent, merging provided fields with the
+   * existing config. This is a shallow merge for top-level keys plus a
+   * shallow merge for `transport`, `llm`, and `memory` nested objects —
+   * partial updates don't wipe out fields that weren't included.
+   */
+  updateConfig(id: string, partial: Partial<AgentRegistryConfig>): void {
+    const existing = this.getConfig(id);
+    if (!existing) {
+      // No existing config — write partial as-is (this path only fires if the
+      // caller creates an agent via updateConfig, which is unusual)
+      this.db.prepare("UPDATE agents SET config_json = ?, updated_at = ? WHERE id = ?")
+        .run(JSON.stringify(partial), Date.now(), id);
+      return;
+    }
+    const merged: AgentRegistryConfig = {
+      ...existing,
+      ...partial,
+      transport: { ...existing.transport, ...(partial.transport || {}) },
+      llm: { ...existing.llm, ...(partial.llm || {}) },
+      memory: {
+        ...existing.memory,
+        ...(partial.memory || {}),
+        workingMemory: {
+          ...(existing.memory?.workingMemory || {}),
+          ...((partial.memory?.workingMemory) || {}),
+        },
+      },
+    } as AgentRegistryConfig;
     this.db.prepare("UPDATE agents SET config_json = ?, updated_at = ? WHERE id = ?")
-      .run(JSON.stringify(config), Date.now(), id);
+      .run(JSON.stringify(merged), Date.now(), id);
   }
 
   /** Update persona text. */

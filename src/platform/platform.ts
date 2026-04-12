@@ -63,6 +63,7 @@ import { ReasoningStripperProcessor } from "../agent/processors/reasoning-stripp
 import { ToolErrorGate } from "../agent/processors/tool-error-gate.js";
 import { AsyncJobGuard } from "../agent/processors/async-job-guard.js";
 import { MessageTimestampProcessor } from "../agent/processors/message-timestamp-processor.js";
+import { AgentBrowser } from "@mastra/agent-browser";
 import { setAllowedBinaries } from "../agent/tools/run-command-tool.js";
 import fs from "node:fs";
 import path from "node:path";
@@ -293,8 +294,9 @@ function createPlatformAgent(params: {
   transports: TransportManager;
   mcpToolFilters: Map<string, Set<string>>;
   agentSettings: AgentSettings;
+  agentBrowser?: AgentBrowser;
 }): Agent {
-  const { config, memory, subAgentRegistry, tools, registry, transports, mcpToolFilters, agentSettings } = params;
+  const { config, memory, subAgentRegistry, tools, registry, transports, mcpToolFilters, agentSettings, agentBrowser } = params;
 
   // Tools every platform agent gets regardless of config
   const hasSubAgents = Object.keys(subAgentRegistry.get(config.id)).length > 0;
@@ -493,6 +495,21 @@ For single sub-agent tasks, skip the handoff file.`;
       bm25: hasSkills,
     });
     if (hasSkills) agentOptions.skillsFormat = "markdown";
+  }
+
+  // Browser: opt-in per-agent. If a CDP URL is configured, connect to that
+  // browser (e.g., user's own Comet/Chrome with existing auth). Otherwise
+  // fall back to the shared headless instance.
+  const browserEnabled = agentSettings.getBrowserEnabled(config.id) ?? false;
+  if (browserEnabled) {
+    const cdpUrl = agentSettings.getBrowserCdpUrl(config.id);
+    if (cdpUrl) {
+      agentOptions.browser = new AgentBrowser({ cdpUrl, scope: "shared" });
+      console.log(`[platform] agent "${config.id}" gets browser tools (CDP: ${cdpUrl})`);
+    } else if (agentBrowser) {
+      agentOptions.browser = agentBrowser;
+      console.log(`[platform] agent "${config.id}" gets browser tools (headless)`);
+    }
   }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- dynamic agent config construction
@@ -946,6 +963,12 @@ export async function startPlatform(): Promise<PlatformContext> {
 
   // 7. For each agent: create memory, sub-agents, agent instance, runner, register handler
   const runners = new Map<string, AgentRunner>();
+
+  // Shared browser instance — only created if any agent has browser enabled
+  const anyBrowserEnabled = agentConfigs.some(c => agentSettings.getBrowserEnabled(c.id));
+  const agentBrowser = anyBrowserEnabled ? new AgentBrowser({ headless: true }) : undefined;
+  if (agentBrowser) console.log("[platform] browser automation enabled (headless)");
+
   const subAgentRegistry = new SubAgentRegistry(loadSubAgents, getMCPTools(), agentStore);
 
   for (const config of agentConfigs) {
@@ -965,6 +988,7 @@ export async function startPlatform(): Promise<PlatformContext> {
       transports,
       mcpToolFilters,
       agentSettings,
+      agentBrowser,
     });
 
     registry.registerInstance(config.id, agent);

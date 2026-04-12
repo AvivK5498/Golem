@@ -67,4 +67,11 @@ export const BUILTIN_TOOLS: ToolDefinition[] = [
     description: "Submit long-running async jobs",
     detail: "Lets the agent dispatch long-running tasks to a background queue instead of blocking the conversation. Useful for API calls that take time to complete and need polling until ready — common examples include video generation, image generation, and any third-party job that returns a job ID you have to check on later.\n\nThe conversation continues immediately after dispatch. When the job completes (or fails), the agent is notified and can deliver the result to you.\n\nSkills that need this tool will tell the agent exactly what to dispatch.",
   },
+  {
+    id: "browser",
+    label: "Browser automation",
+    description: "Navigate, click, type, and interact with web pages",
+    detail: "Adds 16 browser_* tools using accessibility-tree refs for reliable element targeting. Runs headless Chrome. Token-efficient snapshots (~200-400 tokens per page). Use for web scraping, form filling, data extraction, and automated browsing tasks.",
+    security: "high",
+  },
 ];
