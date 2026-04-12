@@ -83,3 +83,7 @@ summary.md
 # macOS
 .DS_Store
 **/.DS_Store
+
+# Personal logs — must never be committed
+Nutrition/
+daily-logs/
