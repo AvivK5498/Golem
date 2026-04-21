@@ -32,7 +32,7 @@ import { allTools } from "../agent/tools/index.js";
 import { loadSubAgents, resolveSkillPaths } from "../agents/loader.js";
 import { Workspace, LocalFilesystem } from "@mastra/core/workspace";
 import { createAgentMemory } from "../memory/mastra-memory.js";
-import { CronStore } from "../scheduler/cron-store.js";
+import { CronStore, LOCAL_TZ } from "../scheduler/cron-store.js";
 import { FeedStore } from "../feed/feed-store.js";
 import { JobQueue } from "../scheduler/job-queue.js";
 import { SettingsStore } from "../scheduler/settings-store.js";
@@ -49,12 +49,14 @@ import { hookRegistry } from "../hooks/index.js";
 import { parseApprovalButtonText, loadPendingToolApproval, updatePendingToolApprovalStatus } from "../agent/tool-approvals.js";
 import { executeApprovedTool } from "../agent/tool-approval-executor.js";
 import { transcribeAudio, type WhisperConfig } from "../media/transcribe.js";
+import { maybeSynthesizeReply } from "../tts/index.js";
 import { uploadToTmpFiles } from "../media/upload.js";
 import { expandEnvVars } from "../config.js";
 import yaml from "yaml";
 import { registerGlobalCronStore } from "../agent/tools/cron-tool.js";
 import { startServer } from "../server.js";
-import { buildPlatformPromptSections, buildPlatformSystemPrompt, buildGroupChatContext } from "./instructions.js";
+import { buildPlatformPromptSections, buildPlatformSystemPrompt, buildGroupChatContext, buildTempoSection } from "./instructions.js";
+import { CACHE_BOUNDARY_SENTINEL } from "../agent/processors/prompt-cache-processor.js";
 import { JobExecutor } from "./job-executor.js";
 import { SubAgentRegistry } from "./sub-agent-registry.js";
 import { GroupIdentityProcessor, stripGroupIdentityTag } from "../agent/processors/group-identity-processor.js";
@@ -63,6 +65,10 @@ import { ReasoningStripperProcessor } from "../agent/processors/reasoning-stripp
 import { ToolErrorGate } from "../agent/processors/tool-error-gate.js";
 import { AsyncJobGuard } from "../agent/processors/async-job-guard.js";
 import { MessageTimestampProcessor } from "../agent/processors/message-timestamp-processor.js";
+import { OwnerStepBudgetProcessor } from "../agent/processors/owner-step-budget.js";
+import { ToolResultSanitizer } from "../agent/processors/tool-result-sanitizer.js";
+import { SubAgentResultCompactor } from "../agent/processors/sub-agent-result-compactor.js";
+import { PromptCacheProcessor } from "../agent/processors/prompt-cache-processor.js";
 import { AgentBrowser } from "@mastra/agent-browser";
 import { setAllowedBinaries } from "../agent/tools/run-command-tool.js";
 import fs from "node:fs";
@@ -185,7 +191,7 @@ class PlatformScheduler {
             if (!isOneShot) {
               // Advance to next run time
               try {
-                const nextRun = CronExpressionParser.parse(job.cron_expr, { tz: "Asia/Jerusalem" })
+                const nextRun = CronExpressionParser.parse(job.cron_expr, { tz: LOCAL_TZ })
                   .next()
                   .getTime();
                 this.cronStore.markRun(job.id, nextRun);
@@ -356,6 +362,7 @@ function createPlatformAgent(params: {
       const tempo = requestContext?.get("memoryTempo") as string | undefined;
       const tempoBand = requestContext?.get("memoryTempoBand") as "active" | "recent" | "stale" | "cold" | undefined;
       const behavior = agentSettings.getBehavior(config.id);
+      const ttsMode = (agentSettings.getTtsMode(config.id) || "off") as "off" | "always" | "inbound" | "tagged";
       const promptSections = buildPlatformPromptSections({
         agentName: config.name,
         characterName: config.characterName,
@@ -364,11 +371,13 @@ function createPlatformAgent(params: {
         lastMessages: agentSettings.getLastMessages(config.id) ?? 12,
         isGroup,
         behavior,
-        ...(tempo && { tempoSincePreviousUserMessage: tempo }),
-        ...(tempoBand && { tempoBand }),
+        ttsMode,
       });
       const persona = registry.getPersona(config.id) || "";
-      const lines: string[] = [`Current time: ${now} (Asia/Jerusalem)`];
+      // Build the stable prompt first. Dynamic per-turn content (time, tempo)
+      // is appended AFTER CACHE_BOUNDARY_SENTINEL — see PromptCacheProcessor,
+      // which splits the string there and marks the static half as cacheable.
+      const lines: string[] = [];
 
       // Build delegation text (if sub-agents exist)
       const currentSubAgents = subAgentRegistry.get(config.id);
@@ -382,25 +391,13 @@ function createPlatformAgent(params: {
         });
         delegationBlock = `## Delegation
 
-You have ${subAgentNames.length} sub-agents. Classify the request, then delegate.
+You have ${subAgentNames.length} sub-agents. Classify the request and delegate to the single most specific match.
 
 | Intent | Agent |
 |--------|-------|
 ${rows.join("\n")}
 
-- Pick the single most specific match
-- One sub-agent can handle multiple tool calls internally — don't split across agents
-- Prefer fewer, well-scoped delegations — max 3 per request
-- For single-domain tasks, one sub-agent call is enough
-
-## Multi-step Delegation
-For tasks requiring 2+ sub-agents:
-1. \`task_write\` — plan the steps
-2. \`handoff_create\` — create shared file with named sections
-3. Delegate to sub-agents — each writes via \`handoff_append\`
-4. \`handoff_read\` → synthesize → respond
-
-For single sub-agent tasks, skip the handoff file.`;
+Delegate to one sub-agent. Use handoff_create only when 2+ sub-agents contribute to the same deliverable.`;
       }
 
       for (const section of promptSections) {
@@ -440,7 +437,16 @@ For single sub-agent tasks, skip the handoff file.`;
         }
       }
 
-      return lines.join("\n");
+      // Append per-turn dynamic context after the cache boundary. Current
+      // time is NOT included here — it's inlined into the user message envelope
+      // by AgentRunner so it doesn't bust the cache prefix. Only tempo lives
+      // here (and only when active), since its detailed guidance is varied.
+      void now;
+      const staticBlock = lines.join("\n");
+      const dynamicLines: string[] = [];
+      if (tempo) dynamicLines.push(buildTempoSection(tempo, tempoBand));
+      const dynamicBlock = dynamicLines.join("\n\n");
+      return `${staticBlock}\n\n${CACHE_BOUNDARY_SENTINEL}\n\n${dynamicBlock}`;
     },
     model: ({ requestContext }: { requestContext?: { get: (key: string) => unknown } }) => {
       const globalTiers = agentSettings.getGlobalTiers() || {};
@@ -457,14 +463,29 @@ For single sub-agent tasks, skip the handoff file.`;
     memory,
     tools: agentTools,
     inputProcessors: [
+      new PromptCacheProcessor(),       // Tag the last system message for Anthropic prompt caching (runs first; later processors may append dynamic system messages after the cache marker, which is fine — those bypass cache by design)
       new ImageStripperProcessor(),       // Strip base64 images from recalled history
       new AsyncJobGuard(),              // Stop loop after async job dispatch (e.g., coding agent)
       new ToolCallFilter(),             // Strip tool calls/results from recalled history (saves tokens)
+      new SubAgentResultCompactor(),    // Strip sub-agent JSON wrapper down to .text on recalled history
+      new ToolResultSanitizer(),        // Cap any still-oversized tool results in recalled history
       new MessageTimestampProcessor(),  // Prepend [N ago] markers to historical user messages (gated by tempo setting)
+      // Primary-agent budget: much more headroom than sub-agent defaults, since
+      // owner turns legitimately orchestrate multi-file reads/writes. Caps exist
+      // only to catch runaway loops, not to throttle normal chunky work.
+      new OwnerStepBudgetProcessor({
+        maxToolsPerStep: 8,
+        maxTokensPerStep: 40_000,
+        maxTokensPerTurn: 250_000,
+        tokenBudgetSoftWarn: 200_000,
+        tokenBudgetHardStop: 500_000,
+      }),
       new TokenLimiterProcessor(170_000), // Prevent context overflow
       new ToolErrorGate(),              // Strip tools after repeated errors to force synthesis
     ],
     outputProcessors: [
+      new SubAgentResultCompactor(),    // Compact sub-agent payloads before persisting to memory
+      new ToolResultSanitizer(),        // Cap oversized tool results before persisting to memory
       new ImageStripperProcessor(),
       new ReasoningStripperProcessor(),
       new GroupIdentityProcessor(config.characterName || config.name, config.role),
@@ -713,6 +734,7 @@ function registerAgentTransport(
     // ── 6. Media processing ──────────────────────────────────
     let effectiveText = msg.text || "";
     let imageData: { base64: string; mimeType: string; filePath?: string } | undefined;
+    const inboundWasVoice = msg.media?.type === "audio";
 
     if (msg.media?.type === "audio" && msg.media.filePath) {
       const whisperCfg: WhisperConfig = {
@@ -818,26 +840,40 @@ function registerAgentTransport(
           {
             sender: msg.sender?.displayName,
             imageData,
-            // Disable progressive messaging in group chats (too noisy)
-            ...(chatType !== "group" && {
-              onProgressText: async (text: string) => {
-                await transport.sendText(msg.from, text);
-              },
-            }),
           },
         );
         if (result.text?.trim() && !isSuppressedResponse(result.text)) {
-          // If progressive messaging already sent part of the response, only send the new portion
           let finalText = result.text;
-          if (result.progressivelySentText && result.text.startsWith(result.progressivelySentText)) {
-            finalText = result.text.slice(result.progressivelySentText.length).trim();
-          }
           // Strip group identity tag before sending to user
           if (chatType === "group") {
             finalText = stripGroupIdentityTag(finalText, config.characterName || config.name, config.role);
           }
           if (finalText && !isSuppressedResponse(finalText)) {
-            await transport.sendText(msg.from, finalText);
+            // TTS: if enabled for this agent and the mode fires, send a voice
+            // note instead of text. Falls back to text silently on any error.
+            const ttsMode = deps.agentSettings.getTtsMode(runner.agentId) || "off";
+            const ttsWillFire = ttsMode === "always"
+              || (ttsMode === "inbound" && inboundWasVoice)
+              || (ttsMode === "tagged" && /\[\[tts\]\]/i.test(finalText));
+            if (ttsWillFire && transport.sendVoiceRecordingIndicator) {
+              transport.sendVoiceRecordingIndicator(msg.from).catch(() => {});
+            }
+            const tts = await maybeSynthesizeReply({
+              agentId: runner.agentId,
+              agentSettings: deps.agentSettings,
+              replyText: finalText,
+              inboundWasVoice,
+            });
+            if (tts && transport.sendVoice) {
+              try {
+                await transport.sendVoice(msg.from, tts.audio);
+              } catch (err) {
+                console.error(`[${runner.agentId}] sendVoice failed, falling back to text:`, err);
+                await transport.sendText(msg.from, finalText);
+              }
+            } else {
+              await transport.sendText(msg.from, finalText);
+            }
           }
 
           // Bot-to-bot routing: if the response @mentions another agent,
@@ -1051,12 +1087,16 @@ export async function startPlatform(): Promise<PlatformContext> {
     if (instance) agentInstances[config.id] = instance;
   }
 
-  new Mastra({
+  // Retain the Mastra instance so observability (Arize/Phoenix) lifecycle hooks,
+  // shared logger, and agent registry remain reachable. Garbage-collecting this
+  // would risk losing traces on shutdown.
+  const mastra = new Mastra({
     agents: agentInstances,
     observability,
     logger: new FilteredMastraLogger({ name: "Mastra", level: "info" }),
     // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Mastra constructor types are complex
   } as any);
+  void mastra;
 
   // 9. Connect all transports
   // 9a. Register group discovery handlers — store discovered groups in SQLite

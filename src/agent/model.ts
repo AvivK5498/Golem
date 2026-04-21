@@ -10,21 +10,41 @@ type ReasoningEffort = "xhigh" | "high" | "medium" | "low" | "minimal" | "none";
 const DEFAULT_REASONING_EFFORT: ReasoningEffort =
   (process.env.DEFAULT_REASONING_EFFORT as ReasoningEffort) || "medium";
 
-// Provider routing: exclude data-training providers, and DON'T set an explicit
-// sort so that OpenRouter's Auto Exacto kicks in for tool-calling requests.
-//
-// Auto Exacto reorders providers using throughput + tool-call success rate +
-// benchmark data — only for requests that include tools. For non-tool requests
-// the default price-weighted routing applies. Setting an explicit `sort` here
-// would bypass Auto Exacto entirely.
-//
-// Note: a `default sort` in OpenRouter account preferences also bypasses
-// Auto Exacto. If Auto Exacto isn't kicking in, check that setting too.
+// Provider routing: exclude data-training providers. Provider ORDER is pinned
+// per model family in buildProviderRouting() to keep each family in a single
+// cache pool — prompt caching only pays off if consecutive turns hit the same
+// provider. allow_fallbacks: true preserves uptime when the primary is down.
 //
 // See: https://openrouter.ai/docs/guides/routing/auto-exacto
-const PROVIDER_ROUTING = {
+const BASE_PROVIDER_ROUTING = {
   data_collection: "deny" as const,
+  allow_fallbacks: true,
 };
+
+/**
+ * Build provider routing for a given model ID. Pinning ORDER by model family
+ * keeps prompt caching stable:
+ *   - Anthropic: explicit cache_control markers require Anthropic-direct (or
+ *     Bedrock with native caching; we prefer direct for simplicity).
+ *   - Google / OpenAI / DeepSeek: automatic caching only hits when consecutive
+ *     turns go to the same provider.
+ * Unknown families fall back to default (Auto Exacto) routing.
+ */
+function buildProviderRouting(modelId: string) {
+  if (modelId.startsWith("anthropic/")) {
+    return { ...BASE_PROVIDER_ROUTING, order: ["anthropic"] };
+  }
+  if (modelId.startsWith("google/")) {
+    return { ...BASE_PROVIDER_ROUTING, order: ["google-ai-studio", "google-vertex"] };
+  }
+  if (modelId.startsWith("openai/")) {
+    return { ...BASE_PROVIDER_ROUTING, order: ["openai"] };
+  }
+  if (modelId.startsWith("deepseek/")) {
+    return { ...BASE_PROVIDER_ROUTING, order: ["deepseek"] };
+  }
+  return BASE_PROVIDER_ROUTING;
+}
 
 function buildReasoning(effort?: ReasoningEffort) {
   const resolved = effort || DEFAULT_REASONING_EFFORT;
@@ -44,10 +64,11 @@ function getOpenRouterProvider() {
         "HTTP-Referer": "https://golem.agent",
         "X-Title": "Golem",
       },
-      // Anthropic prompt caching — not typed in the SDK.
-      extraBody: {
-        cache_control: { type: "ephemeral", ttl: "1h" },
-      },
+      // Prompt caching is handled per-message by PromptCacheProcessor, which
+      // tags the final system message with `providerOptions.openrouter.cacheControl`.
+      // The OpenRouter SDK reads that and emits the correct Anthropic cache_control
+      // block. A provider-level extraBody.cache_control does NOT work here —
+      // verified empirically (cachedInputTokens stayed at 0 across turns).
     });
   }
   return _openRouterProvider;
@@ -68,7 +89,7 @@ export function getMastraModelId(): any {
     parallelToolCalls: true,
     reasoning: buildReasoning(),
     usage: { include: true },
-    provider: PROVIDER_ROUTING,
+    provider: buildProviderRouting(DEFAULT_MODEL),
   });
 }
 
@@ -103,12 +124,12 @@ export function getModelForId(modelId: string, opts?: { fallbackModels?: string[
     return createCodexModel(codexModelId, { reasoningEffort: opts?.reasoningEffort });
   }
 
-  // Default: OpenRouter (unchanged)
+  // Default: OpenRouter (provider routing pinned by model family for cache stability)
   return getOpenRouterProvider()(modelId, {
     parallelToolCalls: true,
     reasoning: buildReasoning(opts?.reasoningEffort),
     usage: { include: true },
-    provider: PROVIDER_ROUTING,
+    provider: buildProviderRouting(modelId),
     ...(opts?.fallbackModels?.length && { models: [modelId, ...opts.fallbackModels] }),
   });
 }
@@ -124,8 +145,10 @@ export function getNanoModel(): any {
   return getOpenRouterProvider()(DEFAULT_NANO_MODEL, {
     reasoning: buildReasoning("none"),
     usage: { include: true },
+    // Nano is single-shot, no-tool, cost-sensitive; sort by price and bypass
+    // family-pinning since caching isn't useful for one-off classification.
     provider: {
-      ...PROVIDER_ROUTING,
+      ...BASE_PROVIDER_ROUTING,
       sort: "price" as const,
     },
   });
