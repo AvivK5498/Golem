@@ -45,7 +45,6 @@ async function buildSeededMemory(seeds: SeedSpec[], bodyChars = 50): Promise<{
     storage,
     options: {
       lastMessages: 12,
-      semanticRecall: false,
     },
   } as ConstructorParameters<typeof Memory>[0]);
 

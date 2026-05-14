@@ -1,18 +1,16 @@
 /**
  * Mastra Memory factory.
  *
- * Creates a single Memory instance that replaces BOTH:
- *   - MemoryManager  (mem0-based semantic memory)
- *   - ConversationHistory  (SQLite conversation history)
+ * Creates a single Memory instance that replaces SQLite ConversationHistory.
  *
  * Mastra Memory handles:
  *   - lastMessages   -> replaces ConversationHistory.getRecentMessages()
- *   - semanticRecall -> replaces MemoryManager.searchMemory()
  *   - Automatic save after agent.generate() -> replaces addMemory() + addMessage()
  *
  * When passed to the Agent constructor and scoped per-thread (via the generate()
- * `memory` option), each chat gets isolated conversation history and
- * semantic recall automatically.
+ * `memory` option), each chat gets isolated conversation history automatically.
+ *
+ * Semantic recall was removed; recall across turns is handled by smart-recall.ts.
  */
 import { Memory } from "@mastra/memory";
 import { LibSQLStore } from "@mastra/libsql";
@@ -25,7 +23,6 @@ interface AgentMemoryConfig {
   id: string;
   memory?: {
     lastMessages?: number;
-    semanticRecall?: boolean;
     observational?: {
       enabled?: boolean;
       model?: string;
@@ -58,13 +55,12 @@ export function createAgentMemory(
 
   // Read from SQLite with YAML fallback
   const lastMessages = agentSettings?.getLastMessages(agentId) ?? memConfig.lastMessages ?? 12;
-  const semanticRecall = agentSettings?.getSemanticRecall(agentId) ?? memConfig.semanticRecall ?? false;
   const wmEnabled = agentSettings?.getWorkingMemoryEnabled(agentId) ?? memConfig.workingMemory?.enabled ?? true;
   const wmScope = agentSettings?.getWorkingMemoryScope(agentId) ?? memConfig.workingMemory?.scope ?? "resource";
 
   const options: Record<string, unknown> = {
     lastMessages,
-    semanticRecall,
+    semanticRecall: false,
   };
 
   if (wmEnabled && template) {

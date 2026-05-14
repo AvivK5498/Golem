@@ -41,7 +41,6 @@ export const SETTINGS_KEYS = {
 
   // Memory
   MEMORY_LAST_MESSAGES: "memory.lastMessages",
-  MEMORY_SEMANTIC_RECALL: "memory.semanticRecall",
   MEMORY_OBSERVATIONAL_ENABLED: "memory.observational.enabled",
   MEMORY_OBSERVATIONAL_MODEL: "memory.observational.model",
   MEMORY_OBSERVATIONAL_SCOPE: "memory.observational.scope",
@@ -218,10 +217,6 @@ export class AgentSettings {
 
   getLastMessages(agentId: string): number | null {
     return this.getNumber(agentId, SETTINGS_KEYS.MEMORY_LAST_MESSAGES);
-  }
-
-  getSemanticRecall(agentId: string): boolean | null {
-    return this.getBool(agentId, SETTINGS_KEYS.MEMORY_SEMANTIC_RECALL);
   }
 
   getBrowserEnabled(agentId: string): boolean | null {
@@ -415,7 +410,6 @@ export class AgentSettings {
     maxSteps?: number;
     reasoningEffort?: string;
     lastMessages?: number;
-    semanticRecall?: boolean;
     workingMemory?: { enabled: boolean; scope: string };
     observational?: { enabled: boolean; model?: string; scope?: string };
     tools?: string[];
@@ -440,7 +434,6 @@ export class AgentSettings {
 
     // Memory
     s.set(agentId, SETTINGS_KEYS.MEMORY_LAST_MESSAGES, String(opts.lastMessages ?? 12));
-    s.set(agentId, SETTINGS_KEYS.MEMORY_SEMANTIC_RECALL, String(opts.semanticRecall ?? false));
     if (opts.workingMemory) {
       s.set(agentId, SETTINGS_KEYS.MEMORY_WORKING_MEMORY_ENABLED, String(opts.workingMemory.enabled));
       s.set(agentId, SETTINGS_KEYS.MEMORY_WORKING_MEMORY_SCOPE, opts.workingMemory.scope);
