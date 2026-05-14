@@ -26,6 +26,7 @@ Built on [Mastra](https://mastra.ai) + [Vercel AI SDK](https://ai-sdk.dev). Supp
 - **Proactive check-ins** — Agents initiate unprompted messages on a configurable schedule with probability gates and active-hours windows
 - **Group chat support** — LLM-based classification decides when to participate in group conversations (5s timeout fallback)
 - **Voice transcription** — Agents transcribe voice notes via Groq's Whisper API (free tier)
+- **Voice replies** — Agents can reply with synthesized speech via ElevenLabs (per-agent modes: off / always / on inbound voice / tagged)
 - **Sub-agent delegation** — Parent agents delegate specialized tasks to child agents with automatic result compaction
 
 </details>
@@ -45,9 +46,9 @@ Built on [Mastra](https://mastra.ai) + [Vercel AI SDK](https://ai-sdk.dev). Supp
 
 - **Tool approval workflow** — Destructive operations require owner approval via Telegram buttons with 15-minute expiry
 - **Command security** — Allowlist-based binary execution control, configurable via the UI
-- **Tool rate limiting** — Max 5 tool calls per step, 15 per turn to prevent runaway loops
+- **Tool rate limiting** — Per-step tool-call budget (8 for primary agents, 4 for sub-agents) to prevent runaway loops
 - **Stale response detection** — Detects repeated responses and retries with a fallback model
-- **Message deduplication** — Per-agent dedup with 5-message sliding window
+- **Message deduplication** — Per-agent dedup with a 60-second TTL window
 
 </details>
 
@@ -102,6 +103,7 @@ Once installed, enable the `code_agent` tool on any agent. The agent can then wr
 |----------|----------|-------------|
 | `OPENROUTER_API_KEY` | Yes | OpenRouter API key for LLM access |
 | `GROQ_API_KEY` | No | Groq API key for voice transcription |
+| `ELEVENLABS_API_KEY` | No | ElevenLabs API key for voice replies (TTS) |
 | `GOLEM_DATA_DIR` | No | Custom data directory (default: `./data`) |
 | `GOLEM_SKILLS_DIR` | No | Custom skills directory (default: `./skills`) |
 
@@ -120,6 +122,7 @@ All state lives in SQLite databases under the data directory:
 | `settings.db` | Runtime settings (model tiers, behavior, integrations) |
 | `platform-memory.db` | Conversation history and working memory |
 | `crons.db` | Scheduled tasks |
+| `jobs.db` | Async job queue (coding, HTTP polling, workflows) |
 | `feed.db` | Activity audit log |
 
 ### Agent Message Flow
@@ -133,19 +136,26 @@ Telegram → Transport → Dedup → Chat classification
 
 ### Processors Pipeline
 
-Output processors run after each agent turn, before memory persistence:
+Input processors run before each LLM step, in order:
 
-- **ImageStripper** — Strips base64 image data from conversation history (including AI SDK v5 `experimental_attachments`)
+- **PromptCache** — Marks the Anthropic prompt-cache boundary
+- **ImageStripper** — Strips base64 image data from history
+- **AsyncJobGuard** — Stops the agent loop after an async job dispatch
+- **ToolCallFilter** — Strips tool calls from recalled history
+- **SubAgentResultCompactor** — Compacts verbose sub-agent results
+- **ToolResultSanitizer** — Caps oversized tool results
+- **MessageTimestamp** — Prepends absolute `[Apr 18 09:35]` markers to recalled user messages for tempo awareness
+- **OwnerStepBudget** — Enforces a per-step tool-call budget
+- **TokenLimiter** — Prevents context overflow (170K token budget)
+- **ToolErrorGate** — Disables tools after repeated failures
+
+Output processors run after each agent turn, before memory persistence, in order:
+
+- **SubAgentResultCompactor** — Compacts verbose sub-agent results
+- **ToolResultSanitizer** — Caps oversized tool results
+- **ImageStripper** — Strips base64 image data (including AI SDK `experimental_attachments`)
 - **ReasoningStripper** — Removes encrypted LLM reasoning blocks
 - **GroupIdentity** — Tags agent responses in group chats
-
-Input processors run before each LLM step:
-
-- **ToolCallFilter** — Strips tool calls from recalled history
-- **MessageTimestamp** — Prepends `[N ago]` markers to recalled user messages for tempo awareness
-- **TokenLimiter** — Prevents context overflow
-- **ToolErrorGate** — Disables tools after repeated failures
-- **AsyncJobGuard** — Stops agent loop after async job dispatch
 
 ## Skills
 
@@ -177,7 +187,7 @@ Define 3 model presets (Low / Medium / High) in Settings. Agents select a tier, 
 
 ### Command Security
 
-The `run_command` tool uses a strict allowlist. Only explicitly allowed binaries can be executed. Configure in Settings > Command Security with presets (Development, Media, System) or add custom binaries.
+The `run_command` tool uses a strict allowlist. Only explicitly allowed binaries can be executed. Configure the allowed binaries in Settings > Command Security.
 
 ### Behavior Dropdowns
 
@@ -217,7 +227,7 @@ bun test
 - **Agent Framework**: [Mastra](https://mastra.ai) (@mastra/core)
 - **LLM Providers**: [OpenRouter](https://openrouter.ai) (300+ models) + [OpenAI Codex](https://openai.com/index/introducing-codex/) (ChatGPT subscription, fair-use quota)
 - **Messaging**: Telegram ([grammY](https://grammy.dev))
-- **Memory**: LibSQL (conversation + vectors + working memory)
+- **Memory**: LibSQL (conversation history + working memory)
 - **Storage**: SQLite (better-sqlite3)
 - **UI**: Next.js 16 + shadcn/ui + Tailwind CSS v4
 - **Observability**: Phoenix (OpenTelemetry)
