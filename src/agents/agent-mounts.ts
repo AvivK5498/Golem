@@ -51,7 +51,8 @@ export function buildAgentMounts(opts: {
   // Skills outside cwd come from getSkillsDir() (GOLEM_SKILLS_DIR). They can't
   // live under /workspace, so they get their own read-only /ext-skills mount.
   const skillsDir = getSkillsDir();
-  const hasExternalSkills = skillPaths.some(p => !p.startsWith(cwd));
+  const isUnderCwd = (p: string): boolean => p === cwd || p.startsWith(cwd + path.sep);
+  const hasExternalSkills = skillPaths.some(p => !isUnderCwd(p));
   if (hasExternalSkills) {
     mounts[EXT_SKILLS_MOUNT] = new LocalFilesystem({
       basePath: skillsDir,
@@ -60,7 +61,7 @@ export function buildAgentMounts(opts: {
     });
   }
   const rewrittenSkillPaths = skillPaths.map(p =>
-    p.startsWith(cwd)
+    isUnderCwd(p)
       ? toVirtual(WORKSPACE_MOUNT, cwd, p)
       : toVirtual(EXT_SKILLS_MOUNT, skillsDir, p),
   );
@@ -69,7 +70,7 @@ export function buildAgentMounts(opts: {
   // missing-on-disk entries with a warning — the agent still starts.
   const seen = new Set<string>();
   for (const m of configuredMounts) {
-    if (!/^[a-z0-9-]+$/.test(m.name) || m.name === "workspace") {
+    if (!/^[a-z0-9-]+$/.test(m.name) || m.name === "workspace" || m.name === "ext-skills") {
       console.warn(`[agent-mounts] skipping mount with invalid name "${m.name}"`);
       continue;
     }
