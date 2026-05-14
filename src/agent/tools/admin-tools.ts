@@ -34,8 +34,9 @@ export const restartTool = createTool({
   id: "restart",
   description:
     "Gracefully restart Golem via the launchd restart wrapper. " +
-    "Use after config changes, code updates, or dependency installations that require a process restart. " +
-    "The process exits cleanly and the restart wrapper brings it back within seconds.",
+    "Use after code updates or dependency installations that require a process restart. " +
+    "The process exits cleanly and the restart wrapper brings it back within seconds. " +
+    "Skip for live config edits applied via config_update (those apply without a restart).",
   inputSchema: z.object({
     reason: z.string().optional().describe("Why the restart is needed (shown in logs)"),
   }),
@@ -76,13 +77,13 @@ export const storeSecretTool = createTool({
   id: "store_secret",
   description:
     "Store a secret (API key, token, credential) in the .env file. " +
-    "The key must be UPPER_SNAKE_CASE (e.g., RUNPOD_API_KEY, TAVILY_API_KEY). " +
+    "The key must be UPPER_SNAKE_CASE matching the vendor the secret belongs to. " +
     "The value is immediately available via process.env without a restart. " +
     "If the key already exists, set overwrite: true to replace it.",
   inputSchema: z.object({
-    key: z.string().regex(/^[A-Z][A-Z0-9_]*$/, "Key must be UPPER_SNAKE_CASE (e.g. RUNPOD_API_KEY)").describe(
-      "Environment variable name in UPPER_SNAKE_CASE. Examples: 'RUNPOD_API_KEY', 'TAVILY_API_KEY', 'OPENROUTER_API_KEY'. " +
-      "Must start with a letter and contain only A-Z, 0-9, and underscores."
+    key: z.string().regex(/^[A-Z][A-Z0-9_]*$/, "Key must be UPPER_SNAKE_CASE").describe(
+      "Environment variable name in UPPER_SNAKE_CASE. Match the variable name to the vendor the secret belongs to " +
+      "(e.g. {VENDOR}_API_KEY or {SERVICE}_TOKEN). Must start with a letter; A-Z, 0-9, underscores only."
     ),
     value: z.string().min(1, "Value cannot be empty").describe(
       "The secret value as a plain string (API token, key, credential). Stored verbatim in .env. " +
@@ -93,8 +94,8 @@ export const storeSecretTool = createTool({
     ),
   }),
   inputExamples: [
-    { input: { key: "RUNPOD_API_KEY", value: "rp_xxxxxxxxxxxx" } },
-    { input: { key: "TAVILY_API_KEY", value: "tvly-xxxxxxxxxxxx", overwrite: true } },
+    { input: { key: "{VENDOR}_API_KEY", value: "sk-…" } },
+    { input: { key: "{SERVICE}_TOKEN", value: "…", overwrite: true } },
   ],
   execute: async (input) => {
     const envPath = path.resolve(".env");
@@ -155,6 +156,10 @@ export const scheduleJobTool = createTool({
     timeoutMs: z.number().optional().default(600_000).describe("Timeout in ms (default: 10 min, max: 20 min for video generation)"),
     maxAttempts: z.number().optional().default(2).describe("Retry attempts on failure (default: 2)"),
   }),
+  inputExamples: [
+    { input: { type: "http-poll", input: { submitUrl: "https://api.example.com/generate", submitBody: { prompt: "..." }, statusUrl: "https://api.example.com/status/{{jobId}}", jobIdPath: "id", statusPath: "status", completedStatuses: ["done"] } } },
+    { input: { type: "coding", input: { task: "Refactor the job-queue module to add priority support." } } },
+  ],
   execute: async (input, context) => {
     const jobQueue = unwrapService<JobQueue>(context?.requestContext?.get("jobQueue" as never));
     if (!jobQueue) {

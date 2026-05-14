@@ -41,7 +41,6 @@ export const SETTINGS_KEYS = {
 
   // Memory
   MEMORY_LAST_MESSAGES: "memory.lastMessages",
-  MEMORY_SEMANTIC_RECALL: "memory.semanticRecall",
   MEMORY_OBSERVATIONAL_ENABLED: "memory.observational.enabled",
   MEMORY_OBSERVATIONAL_MODEL: "memory.observational.model",
   MEMORY_OBSERVATIONAL_SCOPE: "memory.observational.scope",
@@ -59,6 +58,14 @@ export const SETTINGS_KEYS = {
   // Browser
   BROWSER_ENABLED: "browser.enabled",
   BROWSER_CDP_URL: "browser.cdpUrl",
+
+  // TTS (outbound voice replies via ElevenLabs)
+  TTS_MODE: "tts.mode",              // "off" | "always" | "inbound" | "tagged"
+  TTS_VOICE_ID: "tts.voiceId",
+  TTS_MODEL_ID: "tts.modelId",       // defaults to eleven_v3
+  TTS_STABILITY: "tts.stability",    // "creative" | "natural" | "robust"
+  TTS_SPEED: "tts.speed",            // 0.5 to 2.0 (1.0 = normal)
+  TTS_MAX_CHARS: "tts.maxChars",
 
   // Access control
   ALLOWED_GROUPS: "allowedGroups",
@@ -220,16 +227,44 @@ export class AgentSettings {
     return this.getNumber(agentId, SETTINGS_KEYS.MEMORY_LAST_MESSAGES);
   }
 
-  getSemanticRecall(agentId: string): boolean | null {
-    return this.getBool(agentId, SETTINGS_KEYS.MEMORY_SEMANTIC_RECALL);
-  }
-
   getBrowserEnabled(agentId: string): boolean | null {
     return this.getBool(agentId, SETTINGS_KEYS.BROWSER_ENABLED);
   }
 
   getBrowserCdpUrl(agentId: string): string | null {
     return this.store.get(agentId, SETTINGS_KEYS.BROWSER_CDP_URL);
+  }
+
+  getTtsMode(agentId: string): string | null {
+    return this.store.get(agentId, SETTINGS_KEYS.TTS_MODE);
+  }
+
+  getTtsVoiceId(agentId: string): string | null {
+    return this.store.get(agentId, SETTINGS_KEYS.TTS_VOICE_ID);
+  }
+
+  getTtsModelId(agentId: string): string | null {
+    return this.store.get(agentId, SETTINGS_KEYS.TTS_MODEL_ID);
+  }
+
+  getTtsStability(agentId: string): string | null {
+    return this.store.get(agentId, SETTINGS_KEYS.TTS_STABILITY);
+  }
+
+  getTtsSpeed(agentId: string): number | null {
+    const raw = this.store.get(agentId, SETTINGS_KEYS.TTS_SPEED);
+    if (!raw) return null;
+    const n = parseFloat(raw);
+    if (!Number.isFinite(n)) return null;
+    if (n < 0.5 || n > 2.0) return null;
+    return n;
+  }
+
+  getTtsMaxChars(agentId: string): number | null {
+    const raw = this.store.get(agentId, SETTINGS_KEYS.TTS_MAX_CHARS);
+    if (!raw) return null;
+    const n = parseInt(raw, 10);
+    return Number.isFinite(n) && n > 0 ? n : null;
   }
 
   getObservationalEnabled(agentId: string): boolean | null {
@@ -415,7 +450,6 @@ export class AgentSettings {
     maxSteps?: number;
     reasoningEffort?: string;
     lastMessages?: number;
-    semanticRecall?: boolean;
     workingMemory?: { enabled: boolean; scope: string };
     observational?: { enabled: boolean; model?: string; scope?: string };
     tools?: string[];
@@ -440,7 +474,6 @@ export class AgentSettings {
 
     // Memory
     s.set(agentId, SETTINGS_KEYS.MEMORY_LAST_MESSAGES, String(opts.lastMessages ?? 12));
-    s.set(agentId, SETTINGS_KEYS.MEMORY_SEMANTIC_RECALL, String(opts.semanticRecall ?? false));
     if (opts.workingMemory) {
       s.set(agentId, SETTINGS_KEYS.MEMORY_WORKING_MEMORY_ENABLED, String(opts.workingMemory.enabled));
       s.set(agentId, SETTINGS_KEYS.MEMORY_WORKING_MEMORY_SCOPE, opts.workingMemory.scope);

@@ -41,7 +41,10 @@ export class GroupIdentityProcessor implements Processor {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any -- MastraDBMessage content varies
       const content = msg.content as any;
 
-      // Fix #7: Handle all content formats
+      // Format 0: plain-string content (some providers emit this after forced synthesis)
+      if (typeof content === "string") {
+        return { ...msg, content: `${this.tag} ${content}` } as unknown as MastraDBMessage;
+      }
       // Format 1: structured with parts array
       if (content && typeof content === "object" && Array.isArray(content.parts)) {
         const newParts = content.parts.map((part: { type?: string; text?: string }) => {

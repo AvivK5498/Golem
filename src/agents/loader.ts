@@ -17,9 +17,11 @@ import { getMCPTools } from "../agent/mcp-client.js";
 import { loadSkills } from "../skills/loader.js";
 import { getSkillsDir } from "../utils/paths.js";
 import { ToolRateLimitGuard } from "../agent/processors/tool-rate-limit-guard.js";
-import { FinalStepGuard } from "../agent/processors/final-step-guard.js";
 import { ToolErrorGate } from "../agent/processors/tool-error-gate.js";
 import { OwnerStepBudgetProcessor } from "../agent/processors/owner-step-budget.js";
+import { ToolResultSanitizer } from "../agent/processors/tool-result-sanitizer.js";
+import { SubAgentResultCompactor } from "../agent/processors/sub-agent-result-compactor.js";
+import { PromptCacheProcessor } from "../agent/processors/prompt-cache-processor.js";
 import { logger } from "../utils/external-logger.js";
 import { isTransientApiError } from "../utils/api-errors.js";
 import { TOOL_ERROR_COUNT_KEY } from "../agent/tools/error-tagging.js";
@@ -61,8 +63,8 @@ interface AgentsYaml {
 const GLOBAL_SUFFIX = `
 
 Return results only. On error: stop, report what failed and why.
-If you cannot find what you need after a few attempts, stop and say so. Do not explore endlessly. A clear "I couldn't find this" is better than a hallucinated answer.
-If the delegating agent provides a handoff file path, use handoff_append to write your full results to that file. Then respond with a short confirmation only — the file is the deliverable, not your response text.`;
+Stop after 2-3 failed attempts and say "I couldn't find this" — a clear answer beats a hallucinated one.
+When the delegating agent gives you a handoff file path, write your full results there and keep your response to a short confirmation; the file is the deliverable.`;
 
 // ---------------------------------------------------------------------------
 // Context isolation processor — strips inherited parent conversation history
@@ -332,8 +334,8 @@ export function loadSubAgents(
       model: agentModel,
       instructions,
       tools: tools as Record<string, never>,
-      inputProcessors: [contextIsolationProcessor, new ToolRateLimitGuard(), new FinalStepGuard(), new OwnerStepBudgetProcessor({ alwaysActive: true }), new ToolErrorGate()],
-      outputProcessors: [],
+      inputProcessors: [new PromptCacheProcessor(), contextIsolationProcessor, new ToolRateLimitGuard(), new OwnerStepBudgetProcessor({ alwaysActive: true }), new SubAgentResultCompactor(), new ToolResultSanitizer(), new ToolErrorGate()],
+      outputProcessors: [new SubAgentResultCompactor(), new ToolResultSanitizer()],
       defaultOptions: {
         maxSteps: agentConfig.maxSteps ?? 8,
         ...(agentConfig.temperature != null && {

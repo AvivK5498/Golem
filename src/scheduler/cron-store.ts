@@ -3,6 +3,11 @@ import { CronExpressionParser } from "cron-parser";
 import { logger } from "../utils/external-logger.js";
 const require = createRequire(import.meta.url);
 
+// Cron expressions are interpreted in the host machine's local timezone so that
+// "0 9 * * *" means 9am where the user lives. addCron, updateCron, and the
+// scheduler tick all read this constant.
+export const LOCAL_TZ = Intl.DateTimeFormat().resolvedOptions().timeZone;
+
 // Support both better-sqlite3 (Node/tsx) and bun:sqlite (Bun tests)
 // eslint-disable-next-line @typescript-eslint/no-explicit-any -- cross-runtime DB compat (better-sqlite3 / bun:sqlite)
 function getDatabaseClass(): any {
@@ -85,7 +90,7 @@ export class CronStore {
     timezone?: string;
   }): CronJob {
     // Calculate next run time from cron expression in the specified timezone
-    const tz = params.timezone || "Asia/Jerusalem";
+    const tz = params.timezone || LOCAL_TZ;
     let nextRunAt: number | null = null;
     try {
       nextRunAt = CronExpressionParser.parse(params.cronExpr, { tz }).next().getTime();
@@ -170,7 +175,7 @@ export class CronStore {
       // Recalculate next_run_at when cron_expr changes (unless explicitly provided)
       if (fields.next_run_at === undefined) {
         try {
-          const nextRunAt = CronExpressionParser.parse(fields.cron_expr, { tz: "UTC" }).next().getTime();
+          const nextRunAt = CronExpressionParser.parse(fields.cron_expr, { tz: LOCAL_TZ }).next().getTime();
           sets.push("next_run_at = ?");
           values.push(nextRunAt);
         } catch {

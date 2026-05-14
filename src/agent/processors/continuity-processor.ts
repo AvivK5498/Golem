@@ -61,24 +61,9 @@ export class ContinuityProcessor implements Processor {
 
     const lines = [
       "Continuation step for the same user request.",
-      "Keep the same tone and language as earlier messages.",
-      "",
-      "## Rules",
-      "- Act first, ask only when genuinely ambiguous.",
-      "- Never claim completion unless the tool result confirmed it this turn.",
-      "- On error: report briefly, fix, retry. Don't abandon after one failure.",
-      "- Do not restart the task. Treat recent tool results as source of truth.",
-      "",
-      "## Efficiency",
-      "- Parallelize aggressively. If multiple independent calls are needed, make them all in one step.",
-      "- Plan your step budget. Reserve the last step for the final answer.",
-      "- If you used steps inefficiently (sequential calls that could have been parallel, unnecessary reads), briefly note it at the end so the owner can optimize.",
-      "",
-      "## Delegation",
-      "- Delegate to sub-agents when one matches. Use workspace tools directly for file ops.",
-      "- If a sub-agent is already handling this task, let it finish.",
-      "",
-      "## Safety",
+      "- Treat earlier tool results as source of truth; don't restart the task.",
+      "- On error: report briefly, fix, retry once. Don't abandon after one failure.",
+      "- Confirm completion only after a tool result proves it this turn.",
       "- Changes to Golem's own source code require the user's approval.",
     ];
 

@@ -298,7 +298,6 @@ export function startServer(deps: ServerDeps) {
             },
             memory: {
               lastMessages: 12,
-              semanticRecall: false,
               workingMemory: { enabled: true, scope: "resource" as const },
             },
             tools: body.agent.tools || ["cron", "send_media"],
@@ -352,7 +351,6 @@ export function startServer(deps: ServerDeps) {
               maxSteps: agentConfig.llm.maxSteps,
               reasoningEffort: agentConfig.llm.reasoningEffort,
               lastMessages: agentConfig.memory.lastMessages,
-              semanticRecall: agentConfig.memory.semanticRecall,
               workingMemory: agentConfig.memory.workingMemory,
               tools: agentConfig.tools,
               skills: agentConfig.skills,
@@ -1005,7 +1003,6 @@ export function startServer(deps: ServerDeps) {
           },
           memory: {
             lastMessages: 12,
-            semanticRecall: false,
             workingMemory: { enabled: true, scope: "resource" as const },
           },
           tools: input.tools || [],
@@ -1030,7 +1027,6 @@ export function startServer(deps: ServerDeps) {
             maxSteps: agentConfig.llm.maxSteps,
             reasoningEffort: agentConfig.llm.reasoningEffort,
             lastMessages: agentConfig.memory.lastMessages,
-            semanticRecall: agentConfig.memory.semanticRecall,
             workingMemory: agentConfig.memory.workingMemory,
             tools: agentConfig.tools,
             skills: agentConfig.skills,
@@ -1650,15 +1646,19 @@ Example 3 — Study Tutor:
       if (!skipAuth) {
         const rawToken = webhookConfig.token;
         const token = rawToken ? expandEnvVars(rawToken) : rawToken;
-        if (token) {
-          const authHeader = req.headers.authorization || "";
-          const providedToken = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : req.headers["x-golem-token"] as string;
-          if (providedToken !== token) {
-            authFailures.push(now);
-            while (authFailures.length > 0 && now - authFailures[0] > windowMs) authFailures.shift();
-            logger.warn(`webhook auth failure`, { path: pathname });
-            return json(res, { ok: false, error: "Unauthorized" }, 401);
-          }
+        if (!token) {
+          // Fail closed: webhooks enabled with no token generated, and this source
+          // has not explicitly been marked allowUnauthenticated in the UI.
+          logger.error(`webhook rejected: no token configured`, { path: pathname });
+          return json(res, { ok: false, error: "Webhook token not configured. Generate one in the UI or mark this source as allowUnauthenticated." }, 503);
+        }
+        const authHeader = req.headers.authorization || "";
+        const providedToken = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : req.headers["x-golem-token"] as string;
+        if (providedToken !== token) {
+          authFailures.push(now);
+          while (authFailures.length > 0 && now - authFailures[0] > windowMs) authFailures.shift();
+          logger.warn(`webhook auth failure`, { path: pathname });
+          return json(res, { ok: false, error: "Unauthorized" }, 401);
         }
       }
 
@@ -1753,7 +1753,7 @@ Example 3 — Study Tutor:
   });
 
   const port = deps.port ?? SERVER_PORT;
-  server.listen(port, () => {
+  server.listen(port, "127.0.0.1", () => {
     console.log(`[server] listening on http://localhost:${port}`);
     console.log(`[server] web UI at http://localhost:3015`);
     logger.info(`Server listening on port ${port}`, { port: String(port) });

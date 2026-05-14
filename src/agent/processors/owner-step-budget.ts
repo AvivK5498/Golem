@@ -104,9 +104,9 @@ export class OwnerStepBudgetProcessor implements Processor {
     if (totalTokens >= this.tokenBudgetHardStop) {
       console.log(`[step-budget] TOKEN HARD STOP at ${totalTokens} tokens (limit ${this.tokenBudgetHardStop})`);
       logger.warn(`Token budget HARD STOP: ${totalTokens} tokens`, { tokens: String(totalTokens), limit: String(this.tokenBudgetHardStop) });
+      // toolChoice: "none" forbids further tool calls without removing tool
+      // definitions from the request — preserves Anthropic prompt-cache prefix.
       return {
-        tools: {},
-        activeTools: [],
         toolChoice: "none",
         systemMessages: [
           ...args.systemMessages,
@@ -114,8 +114,8 @@ export class OwnerStepBudgetProcessor implements Processor {
             role: "system" as const,
             content:
               `You have used ${totalTokens} tokens this run, reaching the ${this.tokenBudgetHardStop} token budget. ` +
-              "Do not call any more tools. Write your best answer using all the information you have gathered so far. " +
-              "If your research is incomplete, say so and summarize what you found. Do not apologize excessively — just deliver the results.",
+              "Stop calling tools and write your best answer using the information you already have. " +
+              "Deliver the results directly and acknowledge any gaps in one sentence.",
           },
         ],
       };
@@ -169,13 +169,12 @@ export class OwnerStepBudgetProcessor implements Processor {
     const errorCount = (args.requestContext?.get(TOOL_ERROR_COUNT_KEY) as number) || 0;
     const errorContext = errorCount > 0 ? ` You have encountered ${errorCount} tool error${errorCount > 1 ? "s" : ""} so far.` : "";
 
-    // Hard cap: strip tools entirely at 70% of budget
+    // Hard cap: forbid tool calls at 70% of budget (toolChoice: "none" preserves
+    // the cache prefix; stripping `tools` would invalidate it)
     if (budgetFraction >= hardCapThreshold && maxSteps) {
       console.log(`[step-budget] HARD CAP at step ${stepNumber}/${maxSteps} (${Math.round(budgetFraction * 100)}%, ${errorCount} errors) — forcing final answer`);
       logger.warn(`Step budget HARD CAP: step ${stepNumber}/${maxSteps}, ${errorCount} errors`, { step: String(stepNumber), maxSteps: String(maxSteps), errors: String(errorCount) });
       return {
-        tools: {},
-        activeTools: [],
         toolChoice: "none",
         systemMessages: [
           ...args.systemMessages,
@@ -259,9 +258,9 @@ export class OwnerStepBudgetProcessor implements Processor {
       },
     ];
 
+    // toolChoice: "none" forbids further tool calls without removing tool
+    // definitions — preserves Anthropic prompt-cache prefix.
     return {
-      tools: {},
-      activeTools: [],
       toolChoice: "none",
       systemMessages,
     };
@@ -330,15 +329,6 @@ export class OwnerStepBudgetProcessor implements Processor {
     }
 
     return true;
-  }
-
-  private extractStepText(step: unknown): string {
-    if (!step || typeof step !== "object") return "";
-    const text = (step as { text?: unknown }).text;
-    if (typeof text === "string") return text.trim();
-    const response = (step as { response?: { text?: unknown } }).response;
-    if (response && typeof response.text === "string") return response.text.trim();
-    return "";
   }
 
   private toFiniteNumber(value: unknown): number | null {

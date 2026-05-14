@@ -8,6 +8,7 @@ import { type AgentStore } from "./agent-store.js";
 export class AgentRegistry {
   private configs: Map<string, AgentRegistryConfig> = new Map();
   private instances: Map<string, unknown> = new Map();
+  private personaCache: Map<string, string | null> = new Map();
 
   constructor(private store: AgentStore) {}
 
@@ -33,7 +34,17 @@ export class AgentRegistry {
   }
 
   getPersona(id: string): string | null {
-    return this.store.getPersona(id);
+    // Cached: persona text reads on the hot path (every instructions rebuild)
+    // shouldn't hit SQLite. register() + unregister() invalidate the cache.
+    if (this.personaCache.has(id)) return this.personaCache.get(id) ?? null;
+    const value = this.store.getPersona(id);
+    this.personaCache.set(id, value);
+    return value;
+  }
+
+  /** Invalidate the persona cache for an agent (after persona writes). */
+  invalidatePersona(id: string): void {
+    this.personaCache.delete(id);
   }
 
   getMemoryTemplate(id: string): string | null {
@@ -52,6 +63,7 @@ export class AgentRegistry {
   }): void {
     this.store.upsert(id, config, extras);
     this.configs.set(id, config);
+    this.personaCache.delete(id);
     console.log(`[registry] registered agent "${id}"`);
   }
 
@@ -60,6 +72,7 @@ export class AgentRegistry {
     this.store.delete(id);
     this.configs.delete(id);
     this.instances.delete(id);
+    this.personaCache.delete(id);
     console.log(`[registry] unregistered agent "${id}"`);
   }
 

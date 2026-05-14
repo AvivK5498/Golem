@@ -18,12 +18,9 @@ const ALWAYS_ALLOWED = new Set([
 /** User-configured allowed binaries — loaded from SQLite at startup */
 let userAllowedBinaries: Set<string> = new Set();
 
-/** Update the allowed binaries list and refresh tool description (called from platform.ts at startup and when settings change) */
+/** Update the allowed binaries list (called from platform.ts at startup and when settings change). */
 export function setAllowedBinaries(binaries: string[]): void {
   userAllowedBinaries = new Set(binaries);
-  // Update the tool description with current binaries list
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  (runCommandTool as any).description = getRunCommandDescription();
 }
 
 /** Check if a command's binaries are all allowed (used by preprocessCommands) */
@@ -96,8 +93,8 @@ function findBlockedPath(command: string, allowedPaths: string[] = ALLOWED_PATHS
 export const turnRunCommandCounts = new WeakMap<object, number>();
 export const turnRunCommandCache = new WeakMap<object, Map<string, string>>();
 export const turnRunCommandErrors = new WeakMap<object, number>();
-export const MAX_RUN_COMMAND_PER_TURN = 12;
-const MAX_CONSECUTIVE_ERRORS = 2;
+export const MAX_RUN_COMMAND_PER_TURN = 25;
+const MAX_CONSECUTIVE_ERRORS = 4;
 const OVER_LIMIT_GRACE = 3;
 export const MAX_RUN_COMMAND_OUTPUT_CHARS = 8_000;
 
@@ -105,21 +102,14 @@ export const MAX_RUN_COMMAND_OUTPUT_CHARS = 8_000;
 // run_command tool
 // ---------------------------------------------------------------------------
 
-/** Build the tool description dynamically — called at agent creation time (not module load time) */
-export function getRunCommandDescription(): string {
-  const allowed = getAllowedBinariesList();
-  const binList = allowed.length > 0 ? allowed.join(", ") : "(none configured — add binaries in Settings → Command Security)";
-  return "Run a CLI binary on the host machine. " +
-    `Allowed binaries: ${binList}. ` +
-    "Read-only tools (grep, cat, ls, wc, sort, head, tail) are always available. " +
-    `File access restricted to: ${ALLOWED_PATHS.map(p => p.replace(os.homedir(), "~")).join(", ")}. ` +
-    "Sensitive paths (.ssh, .env, .aws, credentials, etc.) are blocked. " +
-    `Output truncated at ${MAX_RUN_COMMAND_OUTPUT_CHARS} chars. Max ${MAX_RUN_COMMAND_PER_TURN} calls per turn.`;
-}
-
 export const runCommandTool = createTool({
   id: "run_command",
-  description: "Run a CLI binary on the host machine. Read-only tools (grep, cat, ls, wc, sort, head, tail) are always available.",
+  description:
+    "Run a CLI binary on the host machine. Read-only tools (grep, cat, ls, wc, sort, head, tail) are always available; " +
+    "additional binaries must be whitelisted in Settings \u2192 Command Security. " +
+    "Sensitive paths (.ssh, .env, .aws, credentials) are blocked and shell command substitution ($(), backticks) is rejected. " +
+    "Output is capped at " + String(MAX_RUN_COMMAND_OUTPUT_CHARS) + " chars and you get at most " + String(MAX_RUN_COMMAND_PER_TURN) + " calls per turn. " +
+    "If a binary is rejected, the error message lists what's currently allowed.",
   inputSchema: z.object({
     command: z.string().describe("The shell command to execute."),
     timeout: z.number().optional().default(30000).describe(
@@ -136,6 +126,17 @@ export const runCommandTool = createTool({
   execute: async (input, context) => {
     const env = input.env;
     const fullCommand = input.command;
+
+    // Block shell command/process substitution — `$(...)`, backticks, `<(...)`, `>(...)`
+    // bypass the binary allowlist because bash evaluates them regardless of the first token.
+    const substitutionMatch = fullCommand.match(/\$\(|`|<\(|>\(/);
+    if (substitutionMatch) {
+      return toolError(
+        `COMMAND REJECTED — shell command substitution ("${substitutionMatch[0]}") is not allowed. ` +
+        `It bypasses the binary allowlist because bash evaluates it regardless of the first command. ` +
+        `Use multiple run_command calls and chain results via your own logic instead.`
+      );
+    }
 
     // Extract binary names from the command, respecting quoted strings.
     // Split on pipe/semicolon/ampersand only when NOT inside quotes.

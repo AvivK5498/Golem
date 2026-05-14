@@ -8,7 +8,6 @@ export const TransportConfigSchema = z.object({
 
 export const MemoryConfigSchema = z.object({
   lastMessages: z.number().default(12),
-  semanticRecall: z.boolean().default(false),
   observational: z
     .object({
       enabled: z.boolean().default(false),
@@ -59,7 +58,7 @@ export const AgentRegistryConfigSchema = z.object({
   enabled: z.boolean().default(true),
   transport: TransportConfigSchema,
   llm: LLMConfigSchema,
-  memory: MemoryConfigSchema.default({ lastMessages: 12, semanticRecall: false }),
+  memory: MemoryConfigSchema.default({ lastMessages: 12 }),
   tools: z.array(z.string()).default([]),
   skills: z.array(z.string()).default([]),
   mcpServers: z.array(z.string()).default([]),

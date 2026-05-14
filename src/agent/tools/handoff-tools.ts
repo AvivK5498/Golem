@@ -24,7 +24,8 @@ export const handoffCreateTool = createTool({
     "Use this before delegating to sub-agents when the task involves research, multi-step analysis, " +
     "or any work where multiple agents need to contribute to a shared result. " +
     "Returns the file path — pass it to each sub-agent in your delegation prompt. " +
-    "After all sub-agents finish, read the file with handoff_read to synthesize the final answer.",
+    "After all sub-agents finish, read the file with handoff_read to synthesize the final answer. " +
+    "Skip when only one sub-agent is needed — delegate to that agent directly instead.",
   inputSchema: z.object({
     topic: z.string().describe("Short description of the task (e.g., 'Personal AI agents research')"),
     sections: z

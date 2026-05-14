@@ -73,7 +73,13 @@ export interface SmartRecallConfig {
   windowDays: number;
   /** Minimum messages to load even if the window is sparse. */
   min: number;
-  /** Maximum messages to load even if the window is saturated. */
+  /**
+   * Maximum messages to load. Acts as a soft target rather than a hard cap:
+   * the rebase strategy lets the actual lookback float between `max` and
+   * `max + rebaseChunk - 1` so the front anchor stays stable across turns
+   * (preserves the prompt-cache prefix). When count exceeds the float band,
+   * the anchor jumps forward by `rebaseChunk` messages.
+   */
   max: number;
   /**
    * Optional hard token ceiling for the entire history. When set, this
@@ -81,7 +87,15 @@ export interface SmartRecallConfig {
    * until total estimated tokens ≤ maxTokens.
    */
   maxTokens?: number;
+  /**
+   * Rebase chunk size for the cache-stable lookback. Larger values keep the
+   * cache warm for more turns at the cost of more uncached tokens per turn
+   * during the float. Defaults to 10.
+   */
+  rebaseChunk?: number;
 }
+
+const DEFAULT_REBASE_CHUNK = 10;
 
 export interface SmartRecallResult {
   /** The total number of messages found within the time window. */
@@ -245,7 +259,14 @@ export async function computeSmartLastMessages(
     candidate = cfg.min;
     reason = "below_min";
   } else if (countInWindow > cfg.max) {
-    candidate = cfg.max;
+    // Rebase quantization: instead of always returning cfg.max (which would
+    // slide the front anchor by 1 every turn and bust the prompt cache),
+    // let the lookback float between [cfg.max, cfg.max + chunk - 1]. The
+    // front anchor only moves when overflow grows past chunk boundaries.
+    const chunk = cfg.rebaseChunk ?? DEFAULT_REBASE_CHUNK;
+    const overflow = countInWindow - cfg.max;
+    const trimmed = Math.floor(overflow / chunk) * chunk;
+    candidate = countInWindow - trimmed;
     reason = "above_max";
   } else {
     candidate = countInWindow;

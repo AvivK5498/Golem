@@ -6,7 +6,6 @@
  * - Memory scoping with agent prefix
  * - Request context setup
  * - Delegation hooks for supervisor pattern
- * - Progressive messaging via onStepFinish
  * - Feed logging (success + error paths)
  * - Per-chat FIFO queue to prevent concurrent processing
  */
@@ -28,6 +27,26 @@ import { logger } from "../utils/external-logger.js";
 import { isTransientApiError } from "../utils/api-errors.js";
 
 const FALLBACK_MODEL = process.env.FALLBACK_MODEL || "openai/gpt-4.1-mini";
+
+// "Now" marker prepended to user message text so the agent gets current time
+// without putting it in the system prompt (where it would invalidate the cache
+// every minute). Includes weekday + year so the agent never has to infer the
+// year from training cutoff or guess the day-of-week from a date.
+const NOW_MARKER_FMT = new Intl.DateTimeFormat("en-GB", {
+  timeZone: "Asia/Jerusalem",
+  weekday: "short",
+  year: "numeric",
+  month: "short",
+  day: "numeric",
+  hour: "2-digit",
+  minute: "2-digit",
+  hour12: false,
+});
+function buildNowMarker(): string {
+  const parts = NOW_MARKER_FMT.formatToParts(new Date());
+  const get = (t: string) => parts.find(p => p.type === t)?.value ?? "";
+  return `[Now: ${get("weekday")} ${get("month")} ${get("day")} ${get("year")} ${get("hour")}:${get("minute")}]`;
+}
 
 /**
  * Unwrap a shielded service reference from requestContext.
@@ -67,7 +86,6 @@ export interface ProcessMessageOptions {
   promptMode?: "full" | "autonomous" | "proactive";
   sender?: string;
   imageData?: { base64: string; mimeType: string; filePath?: string };
-  onProgressText?: (text: string) => Promise<void>;
   /**
    * Per-call override for the memory `lastMessages` cap. When set, this turn
    * loads exactly N most-recent messages instead of the agent-configured value.
@@ -75,6 +93,8 @@ export interface ProcessMessageOptions {
    * Ignored for background runs (which already force lastMessages: 0).
    */
   lastMessagesOverride?: number;
+  /** True when the inbound message was a voice note (transcribed via Whisper). */
+  inboundWasVoice?: boolean;
 }
 
 export interface ProcessMessageResult {
@@ -82,8 +102,6 @@ export interface ProcessMessageResult {
   finishReason: string;
   tokensIn?: number;
   tokensOut?: number;
-  /** Text already sent via progressive messaging (verbatim) */
-  progressivelySentText: string;
 }
 
 // ── AgentRunner ──────────────────────────────────────────────
@@ -220,8 +238,11 @@ export class AgentRunner {
     if (options.imageData) {
       requestContext.set("imageData", options.imageData);
     }
+    if (options.inboundWasVoice) {
+      requestContext.set("inboundWasVoice", true);
+    }
 
-    const isBackgroundRun = promptMode === "autonomous";
+    const isBackgroundRun = promptMode !== "full";
     const maxSteps = this.agentSettings?.getMaxSteps(agentId) ?? 30;
 
     // Resolve the per-turn lastMessages override:
@@ -323,7 +344,6 @@ export class AgentRunner {
       const memoryTurnOptions: Record<string, unknown> = {};
       if (isBackgroundRun) {
         memoryTurnOptions.lastMessages = 0;
-        memoryTurnOptions.semanticRecall = false;
       }
       if (isGroupChat) {
         memoryTurnOptions.workingMemory = { enabled: false };
@@ -395,46 +415,15 @@ export class AgentRunner {
         };
       }
 
-      // Track the last progressively sent text verbatim so we can deduplicate the final message
-      // Track cumulative text to extract per-step deltas (Mastra sends accumulated text, not deltas)
-      let lastSentProgressText = "";
-      let previousCumulativeText = "";
-
-      if (options.onProgressText) {
-        let stepsSinceLastSend = 0;
-
-        generateOptions.onStepFinish = async (props: {
-          text?: string;
-          finishReason?: string;
-          toolCalls?: unknown[];
-        }) => {
-          const cumulativeText = typeof props.text === "string" ? props.text.trim() : "";
-          const hasToolCalls = Array.isArray(props.toolCalls) && props.toolCalls.length > 0;
-          stepsSinceLastSend++;
-          if (!hasToolCalls || cumulativeText.length <= 20 || !options.onProgressText) return;
-
-          // Extract only the new text added in this step
-          let delta = cumulativeText;
-          if (previousCumulativeText && cumulativeText.startsWith(previousCumulativeText)) {
-            delta = cumulativeText.slice(previousCumulativeText.length).trim();
-          }
-          previousCumulativeText = cumulativeText;
-
-          // Send if meaningful text: 40+ chars (skips filler like "Let me check..." or "Got it.")
-          // OR if several steps passed and there's any new content (agent is working through steps)
-          const isSubstantial = delta.length >= 40;
-          const isLongRunning = stepsSinceLastSend >= 2 && delta.length > 20;
-          if (isSubstantial || isLongRunning) {
-            await options.onProgressText(delta);
-            lastSentProgressText = cumulativeText;
-            stepsSinceLastSend = 0;
-          }
-        };
-      }
+      // Inline current time into the user-message envelope so it doesn't bust
+      // the system-prompt cache. Format matches MessageTimestampProcessor for
+      // consistency across the conversation history.
+      const envelopedText = `${buildNowMarker()}\n\n${text}`;
+      const envelopedImageText = `${buildNowMarker()}\n\n${text || "What do you see in this image?"}`;
 
       // Build multimodal message when image is present
       // eslint-disable-next-line @typescript-eslint/no-explicit-any -- CoreMessage content types are complex
-      let messageInput: any = text;
+      let messageInput: any = envelopedText;
       let codexImageDataUri: string | undefined;
       if (options.imageData) {
         // Pass the image as a base64 data URI — the format that works most
@@ -454,7 +443,7 @@ export class AgentRunner {
           role: "user" as const,
           content: [
             { type: "image" as const, image: dataUri, mimeType: options.imageData.mimeType },
-            { type: "text" as const, text: text || "What do you see in this image?" },
+            { type: "text" as const, text: envelopedImageText },
           ],
         }];
       }
@@ -469,7 +458,7 @@ export class AgentRunner {
           codex: {
             ...(generateOptions.providerOptions?.codex || {}),
             inlineImageDataUri: codexImageDataUri,
-            inlineImageText: text || "What do you see in this image?",
+            inlineImageText: envelopedImageText,
           },
         };
       }
@@ -491,11 +480,19 @@ export class AgentRunner {
         if (isTransientApiError(err)) {
           console.warn(`[${agentId}] retries exhausted, falling back to ${FALLBACK_MODEL}`);
           try { logger.warn(`Retries exhausted, falling back to ${FALLBACK_MODEL}`, { agent: agentId, chatType }); } catch { /* ignore */ }
-          result = await this.agent.generate(messageInput, {
-            ...generateOptions,
-            model: getModelForId(FALLBACK_MODEL),
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Mastra generate accepts model override at runtime
-          } as any);
+          // Strip per-provider options that may not apply to the fallback model
+          // (Gemini safety settings, reasoning effort for non-reasoning models, etc.).
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const fallbackOptions: Record<string, any> = { ...generateOptions };
+          if (fallbackOptions.providerOptions) {
+            const { google: _dropGoogle, ...rest } = fallbackOptions.providerOptions;
+            void _dropGoogle;
+            fallbackOptions.providerOptions = rest;
+          }
+          delete fallbackOptions.reasoningEffort;
+          fallbackOptions.model = getModelForId(FALLBACK_MODEL);
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Mastra generate accepts model override at runtime
+          result = await this.agent.generate(messageInput, fallbackOptions as any);
         } else {
           throw err;
         }
@@ -524,13 +521,11 @@ export class AgentRunner {
         }
       }
 
-      // Hard-stop fallback: if many steps ran but result text is empty, the model
-      // hit a limit (error gate, per-turn cap) without producing a final answer.
-      // Ensure the user always gets something back.
+      // Hard-stop fallback: many steps ran but the model never produced final text.
       if (!result.text?.trim() && steps && steps.length > 3) {
         const fallback = "I ran into repeated issues and couldn't complete this task. Please try again or rephrase your request.";
         console.warn(`[${agentId}] empty result after ${steps.length} steps — using fallback`);
-        try { logger.warn("Empty result after hard stop, using fallback", { agent: agentId, steps: String(steps.length) }); } catch { /* ignore */ }
+        try { logger.warn("Turn produced no useful final text; using fallback", { agent: agentId, steps: String(steps.length) }); } catch { /* ignore */ }
         result = { ...result, text: fallback };
       }
 
@@ -571,14 +566,18 @@ export class AgentRunner {
         const staleNote = "\n\n[System: Your previous response was identical to a recent one. Please provide a fresh, different response.]";
         // Preserve the multimodal input on retry — passing `text` alone would
         // drop the image attachment and silently degrade the conversation.
+        // Re-build the now-marker fresh; the retry happens slightly after the
+        // first attempt and the model deserves the latest time.
+        const retryEnveloped = `${buildNowMarker()}\n\n${text}${staleNote}`;
         // eslint-disable-next-line @typescript-eslint/no-explicit-any -- CoreMessage content types are complex
-        let staleRetryInput: any = `${text}${staleNote}`;
+        let staleRetryInput: any = retryEnveloped;
         if (options.imageData) {
+          const retryEnvelopedImage = `${buildNowMarker()}\n\n${text || "What do you see in this image?"}${staleNote}`;
           staleRetryInput = [{
             role: "user" as const,
             content: [
               ...messageInput[0].content.filter((p: { type: string }) => p.type !== "text"),
-              { type: "text" as const, text: `${text || "What do you see in this image?"}${staleNote}` },
+              { type: "text" as const, text: retryEnvelopedImage },
             ],
           }];
         }
@@ -587,6 +586,16 @@ export class AgentRunner {
       this.recordResponseHash(chatId, this.simpleHash(result.text || ""));
 
       const latencyMs = Date.now() - startMs;
+
+      // TEMP DIAGNOSTIC: F-E-5 prompt-caching verification. Delete after confirming.
+      // Looking for non-zero cacheCreationInputTokens / cacheReadInputTokens.
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const anyResult = result as any;
+      console.log(
+        `[cache-probe] agent=${agentId} ` +
+        `usage=${JSON.stringify(anyResult.usage ?? {})} ` +
+        `providerMetadata=${JSON.stringify(anyResult.providerMetadata ?? anyResult.response?.providerMetadata ?? {})}`,
+      );
 
       this.feedStore.log(agentId, {
         source: isBackgroundRun ? "cron" : "direct",
@@ -612,7 +621,6 @@ export class AgentRunner {
         finishReason: result.finishReason || "stop",
         tokensIn: result.usage?.inputTokens,
         tokensOut: result.usage?.outputTokens,
-        progressivelySentText: lastSentProgressText,
       };
     } catch (err) {
       console.error(`[${agentId}] processMessage error:`, err);

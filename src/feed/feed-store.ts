@@ -102,9 +102,9 @@ export class FeedStore {
         truncate(entry.output),
         entry.subAgent || null,
         entry.status || "delivered",
-        entry.tokensIn || null,
-        entry.tokensOut || null,
-        entry.latencyMs || null,
+        entry.tokensIn ?? null,
+        entry.tokensOut ?? null,
+        entry.latencyMs ?? null,
         entry.platform || null,
       );
     } catch (err) {

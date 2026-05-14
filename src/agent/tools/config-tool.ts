@@ -91,19 +91,13 @@ function settingsMapToNested(settings: Record<string, string>): Record<string, u
 export const configUpdateTool = createTool({
   id: "config_update",
   description:
-    "Read or update platform global settings using a 3-step workflow: " +
-    "1) 'read' — view current settings (optionally a specific key via dot-notation). " +
-    "2) 'propose' — show the current value and proposed new value without applying. " +
-    "3) 'apply' — persist the change to SQLite settings (requires owner approval). " +
-    "Sensitive paths (tokens, auth) are blocked. " +
-    "Use 'read' first to understand the current state before proposing changes.",
+    "Read or update platform global settings. 3-step workflow: read \u2192 propose \u2192 apply. " +
+    "'read' returns current settings. 'propose' previews a change without writing. " +
+    "'apply' persists the change (requires owner approval). Sensitive paths (tokens, auth) are blocked.",
   inputSchema: z.object({
     action: z.enum(["read", "propose", "apply"]).describe(
-      "Operation to perform: " +
-      "'read' returns the current value of `key` (or all settings if no key given), " +
-      "'propose' shows the current and proposed values without writing — use to preview before applying, " +
-      "'apply' persists the change (requires owner approval). " +
-      "Always 'propose' first for non-trivial changes; only 'apply' directly when the user has already confirmed."
+      "read = view current, propose = preview a change, apply = persist it. " +
+      "Use propose for any change the user has not explicitly pre-confirmed."
     ),
     key: z.string().optional().describe(
       "Dot-notation settings key (e.g., 'global.server.port', 'global.whisper.enabled'). " +

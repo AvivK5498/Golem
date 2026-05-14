@@ -59,6 +59,18 @@ export interface MessageTransport {
   sendMedia(to: ChatAddress, media: MediaAttachment): Promise<void>;
 
   /**
+   * Send a voice note (platform-native voice bubble). Optional — Telegram
+   * renders OGG/Opus as a voice message with waveform + speed-up UI.
+   */
+  sendVoice?(to: ChatAddress, audio: Buffer, filename?: string): Promise<void>;
+
+  /**
+   * Show a "recording voice" indicator. Optional — Telegram shows a mic
+   * icon instead of the typing indicator.
+   */
+  sendVoiceRecordingIndicator?(to: ChatAddress): Promise<void>;
+
+  /**
    * Register a handler for incoming messages.
    * Multiple handlers can be registered.
    */

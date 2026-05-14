@@ -7,28 +7,31 @@ import type { BehaviorConfig } from "./agent-settings.js";
 
 // ── Behavior preset maps ───────────────────────────────────
 
+// Presets are orthogonal: responseLength owns length (and preamble/sign-offs),
+// tone owns register, format owns structure. Keep copy inside its own lane.
+
 export const RESPONSE_LENGTH_PRESETS: Record<string, string> = {
-  brief: "Respond in 1–3 sentences. No preamble, no summaries, no filler. If using tools, deliver results directly without narrating what you're about to do. Only elaborate when the user explicitly asks for detail.",
-  balanced: "Respond in a natural length — short for simple questions, longer for complex ones. For multi-step tool use, briefly state what you're doing before acting. Skip narration for obvious single-tool calls.",
-  detailed: "Provide thorough responses with context and reasoning. Use bullet points or short paragraphs for structure. Narrate each phase of multi-step work — state what you're doing, report findings, then deliver the final answer.",
+  brief: "Respond in 1\u20133 sentences. No preamble, no summaries, no sign-offs.",
+  balanced: "Respond in a natural length \u2014 short for simple questions, longer for complex ones.",
+  detailed: "Provide thorough responses with context and reasoning. Save synthesis for the final reply.",
 };
 
 export const AGENCY_PRESETS: Record<string, string> = {
-  execute_first: "Act on requests immediately. The user's request is valid and actionable — do not second-guess it. Only ask questions if the request is genuinely ambiguous, has multiple valid interpretations, or cannot be executed due to missing information.",
-  ask_before_acting: "Before executing a task, briefly state your plan and wait for confirmation. For simple, low-risk requests (lookups, questions), respond directly without asking.",
-  consultative: "Act as an advisor. Present options, trade-offs, and recommendations rather than executing directly. Ask clarifying questions to understand the full picture before suggesting a course of action.",
+  execute_first: "Act on requests immediately. Only ask when the request is genuinely ambiguous or cannot be executed without more information.",
+  ask_before_acting: "State your plan and wait for confirmation before executing. For simple lookups and questions, respond directly.",
+  consultative: "Present options, trade-offs, and recommendations. Ask clarifying questions before acting.",
 };
 
 export const TONE_PRESETS: Record<string, string> = {
-  casual: "Use a relaxed, conversational tone. Short sentences, contractions, and informal language are fine. Match the energy of a knowledgeable friend — warm but not sycophantic. Skip honorific greetings and sign-offs.",
-  balanced: "Use a neutral, clear tone. Be direct without being terse, friendly without being chatty. Avoid both stiff formality and forced casualness.",
-  professional: "Use a polished, structured tone. Precise word choice, complete sentences, no slang or contractions. Suitable for content the user might forward to colleagues or clients.",
+  casual: "Conversational register. Contractions and informal language are fine.",
+  balanced: "Neutral, clear register. Friendly without being chatty.",
+  professional: "Polished register. Precise word choice, complete sentences, no slang.",
 };
 
 export const FORMAT_PRESETS: Record<string, string> = {
-  texting: "Very short messages. Fragments ok. One thought per message. No lists, no headers, no sign-offs.",
-  conversational: "Natural flowing responses. Use paragraphs for longer answers, keep it readable.",
-  structured: "Use bullet points, numbered lists, and clear sections for complex answers.",
+  texting: "Fragments ok. One thought per message. No lists or headers.",
+  conversational: "Flowing paragraphs; no headers or bullets.",
+  structured: "Bullet points, numbered lists, and clear sections.",
 };
 
 export const LANGUAGE_PRESETS: Record<string, string> = {
@@ -47,7 +50,7 @@ export const LANGUAGE_PRESETS: Record<string, string> = {
 
 type TempoBand = "active" | "recent" | "stale" | "cold";
 
-function buildTempoSection(elapsed: string, band: TempoBand | undefined): string {
+export function buildTempoSection(elapsed: string, band: TempoBand | undefined): string {
   const variant = process.env.GOLEM_TEMPO_VARIANT || "v10";
   const b = band || "recent";
   switch (variant) {
@@ -211,6 +214,16 @@ export interface PromptParams {
   tempoSincePreviousUserMessage?: string;
   /** Discrete tempo band — active | recent | stale | cold. */
   tempoBand?: "active" | "recent" | "stale" | "cold";
+  /**
+   * TTS mode for this agent — when set and not "off", the agent is told it
+   * can use inline audio tags that ElevenLabs v3 interprets for expression.
+   */
+  ttsMode?: "off" | "always" | "inbound" | "tagged";
+  /**
+   * True when the inbound message was a voice note. Used to gate the Voice
+   * Output block for `inbound` mode — text turns skip the ~1.7KB block.
+   */
+  inboundWasVoice?: boolean;
 }
 
 /** Build platform prompt sections separately for flexible ordering and UI display */
@@ -225,6 +238,8 @@ export function buildPlatformPromptSections(params: PromptParams): { label: stri
     behavior,
     tempoSincePreviousUserMessage,
     tempoBand,
+    ttsMode,
+    inboundWasVoice = false,
   } = params;
   const displayName = characterName || agentName;
 
@@ -260,13 +275,12 @@ Update working memory using \`updateWorkingMemory\` when:
 - The user's communication style or tone preferences become clear
 - You notice outdated facts (completed goals, changed preferences, old deadlines) — update or remove them`;
 
-    let content = isGroup ? baseGroup : baseDirect;
-
-    if (tempoSincePreviousUserMessage) {
-      content += "\n\n" + buildTempoSection(tempoSincePreviousUserMessage, tempoBand);
-    }
-
-    return content;
+    // Tempo is handled separately by platform.ts and appended AFTER the prompt
+    // cache boundary so it doesn't bust the cache key. Keep buildMemoryContent
+    // static here so the Memory section stays in the cacheable prefix.
+    void tempoSincePreviousUserMessage;
+    void tempoBand;
+    return isGroup ? baseGroup : baseDirect;
   };
 
   sections.push(
@@ -291,6 +305,70 @@ Update working memory using \`updateWorkingMemory\` when:
 - Headings (#, ##) don't render — use **bold** text on its own line instead`,
     },
   );
+
+  const responseLength = behavior?.responseLength || "balanced";
+  if (responseLength !== "brief") {
+    const streamingContent = responseLength === "detailed"
+      ? `Between tool calls, ${ownerName} sees your text as a separate Telegram bubble — a real-time progress commitment, not your final answer.
+
+- Write one short, forward-looking action sentence before each step: "Checking today's log.", "Looking up granola values."
+- These are commitments to an action. Do not include results, numbers, or findings — save all of that for the final reply.
+- The final reply (after the last tool call) carries the complete answer on its own. Do not restate or summarize the earlier progress messages there; each bubble stands alone.`
+      : `When a task needs more than one tool call, you may write one short action sentence between tools ("Checking today's log.") — ${ownerName} sees it in real time as a separate bubble. Keep all results and findings for the final reply, and don't restate progress messages there.`;
+    sections.push({
+      label: "Streaming Between Tool Calls",
+      content: streamingContent,
+    });
+  }
+
+  // Inject Voice Output block only when TTS will actually fire on this turn.
+  // - off: never
+  // - always / tagged: always inject (text turns may also be voiced)
+  // - inbound: only when the user's incoming message was a voice note
+  const ttsBlockApplies = ttsMode && ttsMode !== "off"
+    && (ttsMode !== "inbound" || inboundWasVoice);
+  if (ttsBlockApplies) {
+    const taggedHint = ttsMode === "tagged"
+      ? `\n- Include the literal marker [[tts]] somewhere in the reply to trigger voice output; omit it to send as text.`
+      : "";
+    const inboundHint = ttsMode === "inbound"
+      ? `\n- Voice replies fire only when the user sent a voice note. Plain text messages get text replies.`
+      : "";
+    sections.push({
+      label: "Voice Output",
+      content: `Your replies are spoken aloud via ElevenLabs v3. You are not writing a message — you are speaking to someone. Write as if you are saying it, not typing it. Sound human, not like a press release.
+
+Speak, don't write:
+- No bullet points, numbered lists, headings, or markdown. If you'd need to say "asterisk asterisk" to read it aloud, rewrite.
+- No parenthetical asides — the ear can't skip them the way the eye does.
+- No URLs or code snippets. If a link matters, say "I'll send the link" or "search for X". If code matters, describe what it does.
+- One idea per sentence. Short sentences. Vary rhythm — long, short, tiny. "Yeah. Here's the thing. I get it."
+- Contractions always: "it's", "you're", "I'd", "gonna", "kinda" — full forms sound like reading.
+- Spell numbers in casual speech: "two kids", "twenty twenty-six" — digits read formally.
+- Use connectives, not structure: "so, then, and then" — not "first, second, third".
+
+Pacing (ElevenLabs v3 does NOT support [pause 1s] or SSML breaks — use these instead):
+- **Ellipses (…)** for trailing thoughts and hesitation: "I dunno… maybe we try it anyway."
+- **Em-dashes (—)** for self-interruption and mid-thought pivots: "I was gonna say — actually, never mind."
+- **CAPITALS** for stress on a single word: "That is NOT what I meant." Don't overuse.
+- Line breaks reset intonation — break long thoughts into separate lines.
+
+Natural disfluencies — write these literally in the text (not as tags):
+- Fillers: "uhh", "umm", "hmm", "y'know", "like", "I mean"
+- Self-corrections: "We should schedule — I mean, you should schedule — the meeting."
+- Examples: "Okay so… uhh, here's what I'm thinking." / "It's, like, I mean… it's a trust thing." / "Hmm, actually — let me back up."
+
+Expressive audio tags (bracketed, delivery/emotion cues — 1-2 per reply max):
+- Emotions: [laughs] [sighs] [whispers] [excited] [sad] [angry] [curious] [sarcastic] [crying] [mischievously]
+- Delivery: [hesitates] [stammers] [clears throat] [breathes]
+- Tone (at sentence start): [casually] [reflective] [flatly]
+- Don't describe emotions in text ("*laughs*") — use the bracketed tag. Don't use [pause 1s] — it doesn't work; use ellipses or em-dashes.
+
+Length:
+- A 200-word wall becomes a 90-second monologue. Aim for 30 seconds — roughly 60-80 words.
+- If the answer is genuinely complex, give the headline and offer to go deeper: "Short version is X. Want me to break it down?"${inboundHint}${taggedHint}`,
+    });
+  }
 
   return sections;
 }
