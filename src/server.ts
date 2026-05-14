@@ -878,6 +878,24 @@ export function startServer(deps: ServerDeps) {
       } catch (err) { return json(res, { error: err instanceof Error ? err.message : String(err) }, 400); }
     }
 
+    // ── Filesystem path existence check (for the agent Filesystem tab) ──
+    if (req.method === "GET" && pathname === "/api/platform/fs/exists") {
+      const qPath = new URL(req.url ?? "", "http://localhost").searchParams.get("path") ?? "";
+      const expanded = qPath === "~"
+        ? os.homedir()
+        : qPath.startsWith("~/")
+          ? path.join(os.homedir(), qPath.slice(2))
+          : qPath;
+      let exists = false;
+      let isDirectory = false;
+      try {
+        const st = fs.statSync(expanded);
+        exists = true;
+        isDirectory = st.isDirectory();
+      } catch { /* path does not exist — leave both false */ }
+      return json(res, { path: qPath, exists, isDirectory });
+    }
+
     // ── Webhook Scenario CRUD ──────────────────────────────────
     const webhookScenariosMatch = pathname.match(
       /^\/api\/platform\/agents\/([a-z0-9-]+)\/webhook-scenarios(?:\/([a-z0-9-]+))?$/,
