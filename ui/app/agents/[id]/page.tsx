@@ -631,8 +631,13 @@ function MountsEditor({ agentId, settingsData, refetchSettings }: {
   function deleteMount(idx: number) {
     setMounts(prev => prev.filter((_, i) => i !== idx));
     setPathStatus(prev => {
-      const next = { ...prev };
-      delete next[idx];
+      const next: typeof prev = {};
+      Object.entries(prev).forEach(([k, v]) => {
+        const n = Number(k);
+        if (n < idx) next[n] = v;
+        else if (n > idx) next[n - 1] = v;
+        // n === idx is dropped
+      });
       return next;
     });
   }
