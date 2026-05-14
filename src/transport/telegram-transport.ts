@@ -148,6 +148,12 @@ export class TelegramTransport implements MessageTransport {
     }
   }
 
+  async sendVoice(to: ChatAddress, audio: Buffer, filename = "voice.ogg"): Promise<void> {
+    if (!this.bot) throw new Error("Telegram not connected");
+    const source = new InputFile(audio, filename);
+    await this.bot.api.sendVoice(to.id, source);
+  }
+
   async sendMedia(to: ChatAddress, media: MediaAttachment): Promise<void> {
     if (!this.bot) throw new Error("Telegram not connected");
 
@@ -284,6 +290,15 @@ export class TelegramTransport implements MessageTransport {
     if (!this.bot) return;
     try {
       await this.bot.api.sendChatAction(to.id, "typing");
+    } catch {
+      // Non-critical — swallow silently
+    }
+  }
+
+  async sendVoiceRecordingIndicator(to: ChatAddress): Promise<void> {
+    if (!this.bot) return;
+    try {
+      await this.bot.api.sendChatAction(to.id, "record_voice");
     } catch {
       // Non-critical — swallow silently
     }

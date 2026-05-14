@@ -59,6 +59,14 @@ export const SETTINGS_KEYS = {
   BROWSER_ENABLED: "browser.enabled",
   BROWSER_CDP_URL: "browser.cdpUrl",
 
+  // TTS (outbound voice replies via ElevenLabs)
+  TTS_MODE: "tts.mode",              // "off" | "always" | "inbound" | "tagged"
+  TTS_VOICE_ID: "tts.voiceId",
+  TTS_MODEL_ID: "tts.modelId",       // defaults to eleven_v3
+  TTS_STABILITY: "tts.stability",    // "creative" | "natural" | "robust"
+  TTS_SPEED: "tts.speed",            // 0.5 to 2.0 (1.0 = normal)
+  TTS_MAX_CHARS: "tts.maxChars",
+
   // Access control
   ALLOWED_GROUPS: "allowedGroups",
   ADMIN_GROUPS: "adminGroups",
@@ -225,6 +233,38 @@ export class AgentSettings {
 
   getBrowserCdpUrl(agentId: string): string | null {
     return this.store.get(agentId, SETTINGS_KEYS.BROWSER_CDP_URL);
+  }
+
+  getTtsMode(agentId: string): string | null {
+    return this.store.get(agentId, SETTINGS_KEYS.TTS_MODE);
+  }
+
+  getTtsVoiceId(agentId: string): string | null {
+    return this.store.get(agentId, SETTINGS_KEYS.TTS_VOICE_ID);
+  }
+
+  getTtsModelId(agentId: string): string | null {
+    return this.store.get(agentId, SETTINGS_KEYS.TTS_MODEL_ID);
+  }
+
+  getTtsStability(agentId: string): string | null {
+    return this.store.get(agentId, SETTINGS_KEYS.TTS_STABILITY);
+  }
+
+  getTtsSpeed(agentId: string): number | null {
+    const raw = this.store.get(agentId, SETTINGS_KEYS.TTS_SPEED);
+    if (!raw) return null;
+    const n = parseFloat(raw);
+    if (!Number.isFinite(n)) return null;
+    if (n < 0.5 || n > 2.0) return null;
+    return n;
+  }
+
+  getTtsMaxChars(agentId: string): number | null {
+    const raw = this.store.get(agentId, SETTINGS_KEYS.TTS_MAX_CHARS);
+    if (!raw) return null;
+    const n = parseInt(raw, 10);
+    return Number.isFinite(n) && n > 0 ? n : null;
   }
 
   getObservationalEnabled(agentId: string): boolean | null {

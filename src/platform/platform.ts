@@ -363,6 +363,7 @@ function createPlatformAgent(params: {
       const tempoBand = requestContext?.get("memoryTempoBand") as "active" | "recent" | "stale" | "cold" | undefined;
       const behavior = agentSettings.getBehavior(config.id);
       const ttsMode = (agentSettings.getTtsMode(config.id) || "off") as "off" | "always" | "inbound" | "tagged";
+      const inboundWasVoice = requestContext?.get("inboundWasVoice") === true;
       const promptSections = buildPlatformPromptSections({
         agentName: config.name,
         characterName: config.characterName,
@@ -372,6 +373,7 @@ function createPlatformAgent(params: {
         isGroup,
         behavior,
         ttsMode,
+        inboundWasVoice,
       });
       const persona = registry.getPersona(config.id) || "";
       // Build the stable prompt first. Dynamic per-turn content (time, tempo)
@@ -840,6 +842,7 @@ function registerAgentTransport(
           {
             sender: msg.sender?.displayName,
             imageData,
+            inboundWasVoice,
           },
         );
         if (result.text?.trim() && !isSuppressedResponse(result.text)) {
