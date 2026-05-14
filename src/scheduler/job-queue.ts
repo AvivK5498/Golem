@@ -38,6 +38,8 @@ export class JobQueue {
   constructor(dbPath: string) {
     const Database = getDatabaseClass();
     this.db = new Database(dbPath);
+    this.db.exec("PRAGMA journal_mode = WAL");
+    this.db.exec("PRAGMA synchronous = NORMAL");
     this.initSchema();
   }
 

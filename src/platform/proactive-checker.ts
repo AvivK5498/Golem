@@ -21,17 +21,14 @@ If there's something worth following up on — a goal they mentioned,
 a question you asked, progress to check on, or something timely —
 send a brief, natural check-in message.
 
-Important: This is an unprompted follow-up, not a reply to a message.
-Open naturally — e.g., "Hey, just checking in..." or "Quick thought
-about..." so the user knows this isn't a response to something they said.
-Be casual and warm, not robotic.
+This is an unprompted follow-up, not a reply to a message. Open with a cue
+that signals you're initiating contact, not replying, so the user isn't
+confused about whether they said something.
 
-You MUST start your response with exactly "${AGENT_FOLLOWUP_TOKEN} " (including the space after it).
-This token helps you identify previous proactive follow-ups in your conversation history.
-The user will not see this token — it is stripped before delivery.
+Start your reply with "${AGENT_FOLLOWUP_TOKEN} " so past follow-ups are
+identifiable in history (the token is stripped before delivery).
 
-If there's nothing worth following up on right now, respond with
-exactly: NO_FOLLOWUP`;
+If nothing is worth following up on, reply with NO_FOLLOWUP and nothing else.`;
 
 export interface ProactiveCheckerDeps {
   runners: Map<string, AgentRunner>;

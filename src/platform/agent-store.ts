@@ -153,9 +153,15 @@ export class AgentStore {
     return configs;
   }
 
-  /** Get persona text for an agent. */
+  /** Get persona text for an agent — dedicated prepared statement, returns just the persona column. */
   getPersona(id: string): string | null {
-    const row = this.get(id);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    if (!(this as any).getPersonaStmt) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (this as any).getPersonaStmt = this.db.prepare("SELECT persona FROM agents WHERE id = ?");
+    }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const row = (this as any).getPersonaStmt.get(id) as { persona: string | null } | undefined;
     return row?.persona ?? null;
   }
 
