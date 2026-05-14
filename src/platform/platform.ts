@@ -30,6 +30,7 @@ import { initMCPClient, getMCPTools, disconnectMCP } from "../agent/mcp-client.j
 import { getModelForId } from "../agent/model.js";
 import { allTools } from "../agent/tools/index.js";
 import { loadSubAgents, resolveSkillPaths } from "../agents/loader.js";
+import { buildAgentMounts } from "../agents/agent-mounts.js";
 import { Workspace, LocalFilesystem } from "@mastra/core/workspace";
 import { createAgentMemory } from "../memory/mastra-memory.js";
 import { CronStore, LOCAL_TZ } from "../scheduler/cron-store.js";
@@ -322,6 +323,8 @@ function createPlatformAgent(params: {
   const WORKSPACE_WRITE = "workspace_write";
   const hasWorkspaceRead = resolvedToolIds.includes(WORKSPACE_READ);
   const hasWorkspaceWrite = resolvedToolIds.includes(WORKSPACE_WRITE);
+  const mounts = agentSettings.getMounts(config.id);
+  const hasMounts = mounts.length > 0;
   const configWithFilteredTools = {
     ...config,
     tools: [
@@ -339,7 +342,7 @@ function createPlatformAgent(params: {
   // Resolve skills to workspace if configured
   const skillPaths = resolveSkillPaths(resolvedSkillNames);
   const hasSkills = skillPaths.length > 0;
-  const needsWorkspace = hasSkills || hasWorkspaceRead || hasWorkspaceWrite;
+  const needsWorkspace = hasSkills || hasWorkspaceRead || hasWorkspaceWrite || hasMounts;
   console.log(`[platform] agent "${config.id}" gets ${toolCount} tools${hasSkills ? `, ${skillPaths.length} skills` : ""}${needsWorkspace ? ` (workspace: ${hasWorkspaceWrite ? "read-write" : "read-only"})` : ""} [model: ${config.llm?.model || "default"}]`);
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Mastra Agent constructor has complex types
@@ -498,25 +501,45 @@ Delegate to one sub-agent. Use handoff_create only when 2+ sub-agents contribute
   };
 
   if (needsWorkspace) {
-    // Read-write only when workspace_write is explicitly enabled.
-    // Skills-only agents (no workspace_read/write) get read-only access.
-    const readOnly = !hasWorkspaceWrite;
-    // If skills are in an external directory (GOLEM_SKILLS_DIR), disable containment
-    // so Mastra can access skill files outside the project root.
-    //
-    // NOTE: Mastra Workspace basePath stays at process.cwd() so skills (which
-    // live in the project root, outside the per-agent sandbox) remain
-    // accessible. The per-agent sandbox is enforced separately via the
-    // `repoPath` requestContext value, which code_agent and run_command read
-    // to scope their cwd.
-    const hasExternalSkills = hasSkills && skillPaths.some(p => !p.startsWith(process.cwd()));
-    agentOptions.workspace = new Workspace({
-      id: `${config.id}-workspace`,
-      name: `${config.id} workspace`,
-      filesystem: new LocalFilesystem({ basePath: process.cwd(), contained: !hasExternalSkills, readOnly }),
-      skills: hasSkills ? skillPaths : undefined,
-      bm25: hasSkills,
-    });
+    if (hasMounts) {
+      // Agent has configured filesystem mounts. Mastra's Workspace forbids
+      // `filesystem` + `mounts` together, so the project root is demoted to a
+      // /workspace mount and skill paths are rewritten to virtual paths.
+      // See buildAgentMounts.
+      const built = buildAgentMounts({
+        cwd: process.cwd(),
+        configuredMounts: mounts,
+        skillPaths,
+        hasWorkspaceWrite,
+      });
+      agentOptions.workspace = new Workspace({
+        id: `${config.id}-workspace`,
+        name: `${config.id} workspace`,
+        mounts: built.mounts,
+        skills: hasSkills ? built.skillPaths : undefined,
+        bm25: hasSkills,
+      });
+    } else {
+      // Read-write only when workspace_write is explicitly enabled.
+      // Skills-only agents (no workspace_read/write) get read-only access.
+      const readOnly = !hasWorkspaceWrite;
+      // If skills are in an external directory (GOLEM_SKILLS_DIR), disable containment
+      // so Mastra can access skill files outside the project root.
+      //
+      // NOTE: Mastra Workspace basePath stays at process.cwd() so skills (which
+      // live in the project root, outside the per-agent sandbox) remain
+      // accessible. The per-agent sandbox is enforced separately via the
+      // `repoPath` requestContext value, which code_agent and run_command read
+      // to scope their cwd.
+      const hasExternalSkills = hasSkills && skillPaths.some(p => !p.startsWith(process.cwd()));
+      agentOptions.workspace = new Workspace({
+        id: `${config.id}-workspace`,
+        name: `${config.id} workspace`,
+        filesystem: new LocalFilesystem({ basePath: process.cwd(), contained: !hasExternalSkills, readOnly }),
+        skills: hasSkills ? skillPaths : undefined,
+        bm25: hasSkills,
+      });
+    }
     if (hasSkills) agentOptions.skillsFormat = "markdown";
   }
 
@@ -1008,7 +1031,7 @@ export async function startPlatform(): Promise<PlatformContext> {
   const agentBrowser = anyBrowserEnabled ? new AgentBrowser({ headless: true }) : undefined;
   if (agentBrowser) console.log("[platform] browser automation enabled (headless)");
 
-  const subAgentRegistry = new SubAgentRegistry(loadSubAgents, getMCPTools(), agentStore);
+  const subAgentRegistry = new SubAgentRegistry(loadSubAgents, getMCPTools(), agentStore, (id) => agentSettings.getMounts(id));
 
   for (const config of agentConfigs) {
     console.log(`[platform] initializing agent "${config.id}"...`);
