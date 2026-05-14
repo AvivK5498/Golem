@@ -377,6 +377,7 @@ function createPlatformAgent(params: {
         behavior,
         ttsMode,
         inboundWasVoice,
+        mounts,
       });
       const persona = registry.getPersona(config.id) || "";
       // Build the stable prompt first. Dynamic per-turn content (time, tempo)

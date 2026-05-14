@@ -3,7 +3,7 @@
  *
  * Extracted from platform.ts to keep orchestration and prompt logic separate.
  */
-import type { BehaviorConfig } from "./agent-settings.js";
+import type { BehaviorConfig, FilesystemMount } from "./agent-settings.js";
 
 // ── Behavior preset maps ───────────────────────────────────
 
@@ -224,6 +224,11 @@ export interface PromptParams {
    * Output block for `inbound` mode — text turns skip the ~1.7KB block.
    */
   inboundWasVoice?: boolean;
+  /**
+   * Per-agent filesystem mounts. When non-empty, a "Filesystem Mounts" section
+   * is added listing each mount's virtual path, access mode, and description.
+   */
+  mounts?: FilesystemMount[];
 }
 
 /** Build platform prompt sections separately for flexible ordering and UI display */
@@ -240,6 +245,7 @@ export function buildPlatformPromptSections(params: PromptParams): { label: stri
     tempoBand,
     ttsMode,
     inboundWasVoice = false,
+    mounts,
   } = params;
   const displayName = characterName || agentName;
 
@@ -305,6 +311,19 @@ Update working memory using \`updateWorkingMemory\` when:
 - Headings (#, ##) don't render — use **bold** text on its own line instead`,
     },
   );
+
+  // Filesystem mounts — external directories the agent can read/write. Static
+  // (config-stable) so it stays in the cacheable prompt prefix.
+  if (mounts && mounts.length > 0) {
+    const rows = mounts.map(m => {
+      const mode = m.access === "rw" ? "read-write" : "read-only";
+      return `- /mnt/${m.name} (${mode}) — ${m.description || "no description"}`;
+    });
+    sections.push({
+      label: "Filesystem Mounts",
+      content: `You have these directories mounted. Use the workspace file tools (read_file, write_file, edit_file, list_files, grep) to work with them.\n\n${rows.join("\n")}`,
+    });
+  }
 
   const responseLength = behavior?.responseLength || "balanced";
   if (responseLength !== "brief") {
