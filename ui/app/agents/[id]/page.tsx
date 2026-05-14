@@ -2425,6 +2425,98 @@ export default function AgentEditPage({ params }: { params: Promise<{ id: string
 
                     <Separator />
 
+                    {/* Voice (TTS) */}
+                    <Card size="sm">
+                      <CardHeader className="border-b">
+                        <div className="flex items-center gap-2">
+                          <CardTitle className="text-xs">Voice (TTS)</CardTitle>
+                          <Badge variant="outline" className="text-[9px] border-border">ElevenLabs</Badge>
+                        </div>
+                      </CardHeader>
+                      <CardContent className="space-y-2">
+                        <div className="space-y-1.5">
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-[10px] text-muted-foreground font-medium">Mode</span>
+                            <span
+                              className="text-[9px] text-muted-foreground/50 cursor-help"
+                              title="off: never speak. always: every reply as voice. inbound: only when user sent a voice note. tagged: only when the model emits [[tts]] in its reply."
+                            >&#9432;</span>
+                          </div>
+                          <select
+                            value={settingsData["tts.mode"] || "off"}
+                            onChange={e => saveSetting("tts.mode", e.target.value)}
+                            className="w-full bg-muted border border-border rounded-md px-2 py-1 text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                          >
+                            <option value="off">off</option>
+                            <option value="inbound">inbound (reply to voice with voice)</option>
+                            <option value="always">always</option>
+                            <option value="tagged">tagged ([[tts]] marker)</option>
+                          </select>
+                        </div>
+                        {settingsData["tts.mode"] && settingsData["tts.mode"] !== "off" && (
+                          <>
+                            <div className="space-y-1.5 pt-1">
+                              <span className="text-[10px] text-muted-foreground font-medium">Voice ID</span>
+                              <input
+                                defaultValue={settingsData["tts.voiceId"] || ""}
+                                onBlur={e => saveSetting("tts.voiceId", e.target.value.trim())}
+                                onKeyDown={e => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
+                                placeholder="e.g. pMsXgVXv3BLzUgSXRplE"
+                                className="w-full bg-muted border border-border rounded-md px-2 py-1 font-mono text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                              />
+                            </div>
+                            <div className="space-y-1.5 pt-1">
+                              <span className="text-[10px] text-muted-foreground font-medium">Model</span>
+                              <input
+                                defaultValue={settingsData["tts.modelId"] || ""}
+                                onBlur={e => saveSetting("tts.modelId", e.target.value.trim())}
+                                onKeyDown={e => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
+                                placeholder="eleven_v3 (default)"
+                                className="w-full bg-muted border border-border rounded-md px-2 py-1 font-mono text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                              />
+                            </div>
+                            <div className="space-y-1.5 pt-1">
+                              <span className="text-[10px] text-muted-foreground font-medium">Stability</span>
+                              <select
+                                value={settingsData["tts.stability"] || "natural"}
+                                onChange={e => saveSetting("tts.stability", e.target.value)}
+                                className="w-full bg-muted border border-border rounded-md px-2 py-1 text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                              >
+                                <option value="creative">creative</option>
+                                <option value="natural">natural</option>
+                                <option value="robust">robust</option>
+                              </select>
+                            </div>
+                            <div className="space-y-1.5 pt-1">
+                              <div className="flex items-center justify-between">
+                                <span className="text-[10px] text-muted-foreground font-medium">Speed</span>
+                                <span className="text-[10px] text-muted-foreground font-mono tabular-nums">
+                                  {parseFloat(settingsData["tts.speed"] || "1.0").toFixed(2)}x
+                                </span>
+                              </div>
+                              <input
+                                type="range"
+                                min="0.7"
+                                max="1.2"
+                                step="0.05"
+                                value={settingsData["tts.speed"] || "1.0"}
+                                onChange={e => saveSetting("tts.speed", e.target.value)}
+                                className="w-full accent-teal-500"
+                              />
+                              <p className="text-[10px] text-muted-foreground/50">
+                                Note: v3 favors tag/punctuation pacing. Speed works best on multilingual_v2.
+                              </p>
+                            </div>
+                            <p className="text-[10px] text-muted-foreground/60 pt-1">
+                              Requires <span className="font-mono">ELEVENLABS_API_KEY</span>. v3 tags like <span className="font-mono">[laughs]</span>, <span className="font-mono">[whispers]</span>, <span className="font-mono">[pause 1s]</span> work inline.
+                            </p>
+                          </>
+                        )}
+                      </CardContent>
+                    </Card>
+
+                    <Separator />
+
                     {/* Access Control */}
                     <Card size="sm">
                       <CardHeader className="border-b">
