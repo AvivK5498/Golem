@@ -30,9 +30,12 @@ const FALLBACK_MODEL = process.env.FALLBACK_MODEL || "openai/gpt-4.1-mini";
 
 // "Now" marker prepended to user message text so the agent gets current time
 // without putting it in the system prompt (where it would invalidate the cache
-// every minute). Format matches MessageTimestampProcessor for consistency.
+// every minute). Includes weekday + year so the agent never has to infer the
+// year from training cutoff or guess the day-of-week from a date.
 const NOW_MARKER_FMT = new Intl.DateTimeFormat("en-GB", {
   timeZone: "Asia/Jerusalem",
+  weekday: "short",
+  year: "numeric",
   month: "short",
   day: "numeric",
   hour: "2-digit",
@@ -42,7 +45,7 @@ const NOW_MARKER_FMT = new Intl.DateTimeFormat("en-GB", {
 function buildNowMarker(): string {
   const parts = NOW_MARKER_FMT.formatToParts(new Date());
   const get = (t: string) => parts.find(p => p.type === t)?.value ?? "";
-  return `[Now: ${get("month")} ${get("day")} ${get("hour")}:${get("minute")}]`;
+  return `[Now: ${get("weekday")} ${get("month")} ${get("day")} ${get("year")} ${get("hour")}:${get("minute")}]`;
 }
 
 /**
@@ -90,6 +93,8 @@ export interface ProcessMessageOptions {
    * Ignored for background runs (which already force lastMessages: 0).
    */
   lastMessagesOverride?: number;
+  /** True when the inbound message was a voice note (transcribed via Whisper). */
+  inboundWasVoice?: boolean;
 }
 
 export interface ProcessMessageResult {
@@ -232,6 +237,9 @@ export class AgentRunner {
     }
     if (options.imageData) {
       requestContext.set("imageData", options.imageData);
+    }
+    if (options.inboundWasVoice) {
+      requestContext.set("inboundWasVoice", true);
     }
 
     const isBackgroundRun = promptMode !== "full";
