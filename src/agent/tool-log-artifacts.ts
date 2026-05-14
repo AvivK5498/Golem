@@ -138,7 +138,10 @@ export function buildToolResultMemorySummary(params: {
   const status = inferToolStatus(params.result);
   const argsPreview = summarizeArgs(params.args);
   const details = argsPreview ? ` (${argsPreview})` : "";
-  return `Used tool ${toolName}${details} -> ${status}. Full log: ${params.logPath}`;
+  // Resolve to absolute so the agent can `cat` it from any cwd (including its
+  // per-agent workspace, where the relative `./data/tool-logs/…` doesn't exist).
+  const absoluteLogPath = path.resolve(params.logPath);
+  return `Used tool ${toolName}${details} -> ${status}. Full log: ${absoluteLogPath}`;
 }
 
 export function createToolLogEntry(params: {

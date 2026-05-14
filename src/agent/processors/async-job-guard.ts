@@ -27,10 +27,11 @@ export class AsyncJobGuard implements Processor {
       args.abort("Async job dispatched — loop terminated");
     }
 
-    // Fallback if abort is unavailable
+    // Fallback if abort is unavailable: forbid further tool use without
+    // stripping the tool definitions (preserves the Anthropic prompt cache
+    // prefix — see Anthropic prompt-caching docs: only `messages` cache
+    // invalidates when tool_choice changes; `tools` and `system` stay warm).
     return {
-      tools: {},
-      activeTools: [],
       toolChoice: "none",
     };
   }

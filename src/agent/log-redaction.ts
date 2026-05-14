@@ -26,8 +26,9 @@ export function redactSecretsInText(text: string): string {
 
 /**
  * Convert unknown values to compact, secret-safe log text.
+ * When `maxChars` > 0, the result is truncated with a trailing ellipsis marker.
  */
-export function toSafeLogString(value: unknown, _maxChars = 0): string {
+export function toSafeLogString(value: unknown, maxChars = 0): string {
   let text: string;
   if (typeof value === "string") {
     text = value;
@@ -39,5 +40,9 @@ export function toSafeLogString(value: unknown, _maxChars = 0): string {
     }
   }
 
-  return redactSecretsInText(text);
+  const redacted = redactSecretsInText(text);
+  if (maxChars > 0 && redacted.length > maxChars) {
+    return redacted.slice(0, maxChars) + "\u2026[truncated]";
+  }
+  return redacted;
 }

@@ -42,9 +42,11 @@ export class ToolErrorGate implements Processor {
       details: errorDetails.join(" | "),
     });
 
+    // Forbid further tool calls but keep tool definitions in the request so
+    // the Anthropic cache prefix (tools + system) remains valid across the
+    // remainder of this turn and into the next turn. Anthropic invalidates
+    // only the `messages` cache when tool_choice changes.
     return {
-      tools: {},
-      activeTools: [],
       toolChoice: "none",
       systemMessages: [
         ...args.systemMessages,

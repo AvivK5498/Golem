@@ -137,6 +137,16 @@ function trackCallAndGetRepeatCount(context: unknown, toolName: string, args: un
 const LOOP_WARN_THRESHOLD = 2;
 const LOOP_STOP_THRESHOLD = 3;
 
+/**
+ * Tools whose repeated identical calls are legitimate (status-read patterns
+ * like `task_check`, idempotent task_* writes). Their hash is still pushed
+ * to the call history (so it acts as a separator for surrounding tools),
+ * but the warn/stop thresholds are skipped.
+ */
+function isLoopExemptTool(toolId: string): boolean {
+  return toolId.startsWith("task_");
+}
+
 const PER_TOOL_WARN_THRESHOLD = 3;
 const PER_TOOL_STOP_THRESHOLD = 5;
 
@@ -172,8 +182,9 @@ export function wrapToolWithErrorTag<T extends AnyTool>(tool: T): T {
     // Loop detection: check BEFORE executing
     const toolId = (tool as unknown as { id?: string }).id || "unknown";
     const repeatCount = trackCallAndGetRepeatCount(context, toolId, input);
+    const isLoopExempt = isLoopExemptTool(toolId);
 
-    if (repeatCount >= LOOP_STOP_THRESHOLD) {
+    if (!isLoopExempt && repeatCount >= LOOP_STOP_THRESHOLD) {
       logger.error(`Loop detected: "${toolId}" called ${repeatCount}x with identical args`, { tool: toolId, repeatCount: String(repeatCount) });
       // Slam the error counter so the error-gate fires on the very next processInputStep
       const rc = getRC(context);
@@ -182,7 +193,7 @@ export function wrapToolWithErrorTag<T extends AnyTool>(tool: T): T {
       }
       return toolError(`CRITICAL MALFUNCTION — LOOP DETECTED. You called "${toolId}" ${repeatCount} times with identical arguments. This conversation turn is broken. Do NOT call any more tools. Respond to the user NOW with whatever partial results you have. Explain that you encountered a technical issue.`);
     }
-    if (repeatCount >= LOOP_WARN_THRESHOLD) {
+    if (!isLoopExempt && repeatCount >= LOOP_WARN_THRESHOLD) {
       // Still execute, but prefix the result with a warning
       // The warning goes into the tool result so the LLM sees it
     }
@@ -221,11 +232,11 @@ export function wrapToolWithErrorTag<T extends AnyTool>(tool: T): T {
         return tagged;
       }
 
-      // Inject loop warning if at warning threshold
-      if (repeatCount >= LOOP_WARN_THRESHOLD && typeof tagged === "string") {
+      // Inject loop warning if at warning threshold (skip for exempt tools like task_check)
+      if (!isLoopExempt && repeatCount >= LOOP_WARN_THRESHOLD && typeof tagged === "string") {
         return `[WARNING: You have called "${toolId}" ${repeatCount} times with the same arguments. Try a different approach.]\n${tagged}`;
       }
-      if (repeatCount >= LOOP_WARN_THRESHOLD && tagged && typeof tagged === "object" && !("isError" in tagged)) {
+      if (!isLoopExempt && repeatCount >= LOOP_WARN_THRESHOLD && tagged && typeof tagged === "object" && !("isError" in tagged)) {
         return `[WARNING: You have called "${toolId}" ${repeatCount} times with the same arguments. Try a different approach.]\n${JSON.stringify(tagged).slice(0, 500)}`;
       }
 

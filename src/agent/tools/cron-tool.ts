@@ -1,33 +1,13 @@
-import { createRequire } from "node:module";
 import { createTool } from "@mastra/core/tools";
 import { z } from "zod";
-import fs from "node:fs";
-import { dataPath } from "../../utils/paths.js";
 import { unwrapService } from "../../platform/agent-runner.js";
-import type { CronStore } from "../../scheduler/cron-store.js";
+import { LOCAL_TZ, type CronStore } from "../../scheduler/cron-store.js";
 
 // Module-level fallback for sub-agents that don't have cronStore in requestContext
 let globalCronStore: CronStore | null = null;
 export function registerGlobalCronStore(store: CronStore): void {
   globalCronStore = store;
 }
-
-// ---------------------------------------------------------------------------
-// Cron summary — read existing crons at load time for tool description
-// ---------------------------------------------------------------------------
-const CRON_SUMMARY: string = (() => {
-  try {
-    const dbPath = dataPath("crons.db");
-    if (!fs.existsSync(dbPath)) return "No crons configured.";
-    const req = createRequire(import.meta.url);
-    const Database = typeof Bun !== "undefined" ? req("bun:sqlite").Database : req("better-sqlite3");
-    const db = new Database(dbPath, { readonly: true });
-    const rows = db.prepare("SELECT id, name, cron_expr, paused FROM crons ORDER BY id").all() as Array<{ id: number; name: string; cron_expr: string; paused: number }>;
-    db.close();
-    if (rows.length === 0) return "No crons configured.";
-    return rows.map(r => `#${r.id} "${r.name}" (${r.cron_expr})${r.paused ? " [PAUSED]" : ""}`).join("; ");
-  } catch { return "Unable to read crons."; }
-})();
 
 /** Convert human-friendly intervals to cron expressions. */
 function intervalToCron(interval: string): string | null {
@@ -45,15 +25,10 @@ function intervalToCron(interval: string): string | null {
 export const cronTool = createTool({
   id: "cron",
   description:
-    "Manage scheduled jobs: add, remove, pause, resume, run, list. " +
-    "Schedule kinds: 'delay' = fire once after a duration (2m/30m/1h/3h — best for 'remind me in X'), " +
-    "'every' = recurring interval (15m/30m/1h/2h/6h/1d), " +
-    "'cron' = cron expression (0 9 * * 1-5). " +
+    "Manage scheduled jobs (action=list/add/remove/pause/resume/run). " +
     "All jobs trigger a full agent turn with the message as prompt. " +
-    "For 'in X minutes/hours' requests, always use schedule.kind='delay'. " +
-    "Cron expressions are in local time (Asia/Jerusalem) — write times as the user says them, no UTC conversion needed. " +
-    "Set once=true for one-shot cron jobs that auto-delete after firing. Delay jobs are always one-shot. " +
-    `Current crons: ${CRON_SUMMARY}`,
+    `Times are interpreted in the host's local timezone (${LOCAL_TZ}); write them as the user says them. ` +
+    "Call action='list' to see the current crons when needed.",
   inputSchema: z.object({
     action: z.enum(["list", "add", "remove", "pause", "resume", "run"]).describe(
       "Operation to perform: " +
@@ -146,7 +121,7 @@ export const cronTool = createTool({
 
         try {
           const { CronExpressionParser } = await import("cron-parser");
-          CronExpressionParser.parse(cronExpr, { tz: "Asia/Jerusalem" });
+          CronExpressionParser.parse(cronExpr, { tz: LOCAL_TZ });
         } catch (err) {
           return `Invalid cron expression: ${cronExpr} (${err instanceof Error ? err.message : String(err)})`;
         }

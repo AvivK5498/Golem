@@ -9,15 +9,6 @@ import {
   writeToolLogArtifact,
 } from "../tool-log-artifacts.js";
 
-const LIVE_INLINE_TOOL_NAMES = new Set([
-  "web_search",
-  "web_fetch",
-  "mastra_workspace_read_file",
-  "mastra_workspace_grep",
-  "skill-search",
-  "skill-read-reference",
-]);
-
 interface SanitizerPart {
   type?: string;
   text?: string;
@@ -33,13 +24,14 @@ interface SanitizerPart {
 /**
  * Sanitizes tool results in two phases:
  *
- * 1. processInputStep — sanitizes memory-retrieved messages BEFORE the LLM
- *    sees them. Full unsanitized tool results are stored in the DB by Mastra's
- *    MessageHistory; this phase catches them on retrieval. Protects the last 3
- *    messages so the agent can reason over its most recent results.
+ * 1. processInputStep — recall-only. Sanitizes only messages from PRIOR turns
+ *    (before the current user message). Current-turn tool results stay full
+ *    so the agent can reason over what it just generated without trying to
+ *    re-read its own tool-log artifacts.
  *
  * 2. processOutputResult — sanitizes tool results AFTER the turn completes,
- *    before they are persisted back to memory. This reduces DB bloat.
+ *    before they are persisted back to memory. This reduces DB bloat for
+ *    future recalls.
  */
 export class ToolResultSanitizer implements Processor {
   readonly id = "tool-result-sanitizer";
@@ -61,15 +53,17 @@ export class ToolResultSanitizer implements Processor {
 
     const result = messages.map((msg, index) => {
       if (msg.role === "system" || msg.role === "user") return msg;
+      // Anything in the current turn (after the latest user message) is fresh
+      // — the agent just generated these and needs the full payload visible.
+      if (currentTurnStart >= 0 && index > currentTurnStart) return msg;
       if (!this.hasSanitizablePayload(msg)) return msg;
-      if (this.shouldKeepInlineForCurrentTurn(msg, index, currentTurnStart)) return msg;
 
       sanitizedCount++;
       return this.sanitizeMessage(msg);
     });
 
     if (sanitizedCount > 0) {
-      console.log(`[tool-sanitizer] Sanitized ${sanitizedCount} memory-retrieved message(s) on input`);
+      console.log(`[tool-sanitizer] Sanitized ${sanitizedCount} recalled message(s) on input`);
     }
     return result;
   }
@@ -116,7 +110,7 @@ export class ToolResultSanitizer implements Processor {
         toolCallId,
         partIndex,
       });
-      const sanitized = this.sanitizeToolResult(toolName || "unknown", args, result, logPath);
+      const sanitized = this.sanitizeToolResult(toolName || "unknown", args, result, logPath, msg.id, toolCallId);
 
       // Keep as tool-invocation with sanitized result instead of converting to text.
       // This prevents sanitized results from appearing in response.text
@@ -156,24 +150,30 @@ export class ToolResultSanitizer implements Processor {
     return messages.findLastIndex((message) => message.role === "user");
   }
 
-  private shouldKeepInlineForCurrentTurn(
-    msg: MastraDBMessage,
-    index: number,
-    currentTurnStart: number,
-  ): boolean {
-    if (currentTurnStart < 0 || index <= currentTurnStart) {
-      return false;
-    }
-
-    return this.getLargePayloadToolNames(msg).some((toolName) => LIVE_INLINE_TOOL_NAMES.has(toolName));
-  }
-
   private sanitizeToolResult(
     toolName: string,
     args: Record<string, unknown> | undefined,
     result: unknown,
     logPath: string,
+    messageId?: string,
+    toolCallId?: string,
   ): string {
+    // Write the full tool result to disk so the agent can read it later if it
+    // needs detail the summary didn't capture. Without this, the "Full log:
+    // <path>" reference in the summary points at a file that doesn't exist,
+    // and the agent cascades into file-not-found errors when it tries to cat.
+    writeToolLogArtifact({
+      relativePath: logPath,
+      entry: createToolLogEntry({
+        timestamp: new Date().toISOString(),
+        messageId,
+        toolCallId,
+        toolName,
+        args,
+        result,
+        logPath,
+      }),
+    });
     return buildToolResultMemorySummary({
       toolName,
       args,
@@ -203,32 +203,6 @@ export class ToolResultSanitizer implements Processor {
         isLargeToolResult(part.text, this.maxInlineResultChars)
       );
     });
-  }
-
-  private getLargePayloadToolNames(msg: MastraDBMessage): string[] {
-    const names = new Set<string>();
-    const rawContent = (msg as { content?: unknown }).content;
-
-    if (typeof rawContent === "string") {
-      if ((msg.role as string) === "tool" && isLargeToolResult(rawContent, this.maxInlineResultChars)) {
-        names.add(this.inferToolName(msg));
-      }
-      return [...names];
-    }
-
-    const content = rawContent as { parts?: unknown[] } | undefined;
-    if (!Array.isArray(content?.parts)) return [...names];
-
-    for (const rawPart of content.parts) {
-      const part = rawPart as SanitizerPart;
-      if (part?.type !== "tool-invocation") continue;
-      const toolInvocation = part.toolInvocation;
-      if (!toolInvocation?.toolName) continue;
-      if (!isLargeToolResult(toolInvocation.result, this.maxInlineResultChars)) continue;
-      names.add(toolInvocation.toolName);
-    }
-
-    return [...names];
   }
 
   private sanitizeTextPayload(

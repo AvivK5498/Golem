@@ -1,18 +1,22 @@
 /**
- * MessageTimestampProcessor — prepends a relative timestamp to each historical
- * user message so the agent can reason about per-message timing, not just the
- * "gap to the previous turn" that the system prompt already provides.
+ * MessageTimestampProcessor — prepends an absolute timestamp to each historical
+ * user message so the agent can reason about per-message timing.
+ *
+ * The marker format is `[Apr 18 09:35] ` (or `[Apr 18 2025 09:35] ` when the
+ * message is from a previous year). Absolute markers are stable across turns,
+ * so they don't invalidate the Anthropic prompt cache. The agent already knows
+ * the current wall-clock time from the system prompt's dynamic block and can
+ * compute elapsed itself.
  *
  * Lifecycle:
  * - processInput: runs once per turn, before the LLM call. Walks the messages
- *   array, finds user messages, prepends `[3 days ago] ` (etc.) to the first
- *   text part. Returns NEW message objects so persistence is unaffected.
+ *   array, finds user messages, prepends `[Apr 18 09:35] ` to the first text
+ *   part. Returns NEW message objects so persistence is unaffected.
  *
  * Skipped:
- * - When the agent's tempo setting is off (gated by `memoryTempoEnabled` on
- *   requestContext, set by AgentRunner per-turn).
- * - The most recent user message (the current turn — "just now" is noise).
- * - Assistant messages (only user message timing is what matters for tempo).
+ * - When the agent's tempo setting is off (gated by `memoryTempoEnabled`).
+ * - The most recent user message (current turn — no marker needed).
+ * - Assistant messages (only user message timing matters for tempo).
  * - Messages without createdAt or with non-parts content shapes.
  *
  * The DB stays clean: this transformation runs in-memory between recall and
@@ -20,7 +24,44 @@
  */
 import type { Processor } from "@mastra/core/processors";
 import type { MastraDBMessage } from "@mastra/core/memory";
-import { formatElapsedHuman } from "../../memory/smart-recall.js";
+
+const TZ = "Asia/Jerusalem";
+
+const ABS_MARKER_FMT_SAMEYEAR = new Intl.DateTimeFormat("en-GB", {
+  timeZone: TZ,
+  month: "short",
+  day: "numeric",
+  hour: "2-digit",
+  minute: "2-digit",
+  hour12: false,
+});
+const ABS_MARKER_FMT_OLDYEAR = new Intl.DateTimeFormat("en-GB", {
+  timeZone: TZ,
+  year: "numeric",
+  month: "short",
+  day: "numeric",
+  hour: "2-digit",
+  minute: "2-digit",
+  hour12: false,
+});
+
+function formatAbsoluteMarker(date: Date, now: Date): string {
+  const sameYear = date.getFullYear() === now.getFullYear();
+  const fmt = sameYear ? ABS_MARKER_FMT_SAMEYEAR : ABS_MARKER_FMT_OLDYEAR;
+  const parts = fmt.formatToParts(date);
+  const get = (t: string) => parts.find(p => p.type === t)?.value ?? "";
+  const month = get("month");
+  const day = get("day");
+  const year = sameYear ? "" : ` ${get("year")}`;
+  const hour = get("hour");
+  const minute = get("minute");
+  return `${month} ${day}${year} ${hour}:${minute}`;
+}
+
+// Match either the new absolute marker `[Apr 18 09:35] ` or the legacy
+// relative marker `[3 minutes ago] ` so we don't double-stamp messages that
+// were saved with the old format and recalled now.
+const MARKER_DETECTOR = /^\[(?:[A-Z][a-z]{2} \d{1,2}(?: \d{4})? \d{2}:\d{2}|[^\]]* ago)\] /;
 
 export class MessageTimestampProcessor implements Processor {
   id = "message-timestamp";
@@ -35,29 +76,25 @@ export class MessageTimestampProcessor implements Processor {
     // Gate: only run when tempo awareness is enabled for this agent.
     if (!requestContext?.get("memoryTempoEnabled")) return messages;
 
-    // Identify the most recent user message — that's the "current turn",
-    // which we never stamp (no "ago" for now).
     const lastUserIdx = findLastUserIdx(messages);
     if (lastUserIdx < 0) return messages;
 
-    const now = Date.now();
+    const now = new Date();
     let changed = false;
     const out: MastraDBMessage[] = messages.map((msg, idx) => {
       // Skip the current turn and any non-user messages.
       if (idx === lastUserIdx) return msg;
       if ((msg as { role?: string }).role !== "user") return msg;
 
-      // Need a real createdAt to compute the delta.
       const createdAtRaw = (msg as { createdAt?: Date | string }).createdAt;
       if (!createdAtRaw) return msg;
       const createdAt = createdAtRaw instanceof Date ? createdAtRaw : new Date(createdAtRaw);
-      const elapsedMs = now - createdAt.getTime();
-      // Suppress sub-minute markers — too noisy and adds tokens for nothing.
-      if (elapsedMs < 60_000) return msg;
-      const marker = `[${formatElapsedHuman(elapsedMs)} ago] `;
+      // Suppress markers for messages within the same minute as now — the
+      // agent can see those as "current" without needing a stamp.
+      if (now.getTime() - createdAt.getTime() < 60_000) return msg;
 
-      // Walk parts; prepend the marker to the FIRST text part. Don't touch
-      // tool calls, images, or anything else.
+      const marker = `[${formatAbsoluteMarker(createdAt, now)}] `;
+
       // eslint-disable-next-line @typescript-eslint/no-explicit-any -- content shape varies
       const content = msg.content as any;
       if (!content || typeof content !== "object" || !Array.isArray(content.parts)) {
@@ -67,8 +104,8 @@ export class MessageTimestampProcessor implements Processor {
       const newParts = content.parts.map((part: { type?: string; text?: string }) => {
         if (!prepended && part.type === "text" && typeof part.text === "string") {
           prepended = true;
-          // Don't double-stamp if the marker is already there (defense in depth).
-          if (part.text.startsWith("[") && part.text.includes(" ago] ")) return part;
+          // Already stamped (either new absolute or legacy relative format) — pass through.
+          if (MARKER_DETECTOR.test(part.text)) return part;
           return { ...part, text: marker + part.text };
         }
         return part;
