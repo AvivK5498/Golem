@@ -6,6 +6,7 @@
  */
 import fs from "node:fs";
 import path from "node:path";
+import os from "node:os";
 
 let _dataDir: string | null = null;
 let _skillsDir: string | null = null;
@@ -35,4 +36,11 @@ export function getAgentWorkspace(agentId: string): string {
 /** Resolve a filename relative to the data directory */
 export function dataPath(filename: string): string {
   return path.join(getDataDir(), filename);
+}
+
+/** Expand a leading ~ or ~/ in a path to the user's home directory. */
+export function expandTilde(p: string): string {
+  if (p === "~") return os.homedir();
+  if (p.startsWith("~/")) return path.join(os.homedir(), p.slice(2));
+  return p;
 }

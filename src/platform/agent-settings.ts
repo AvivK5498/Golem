@@ -27,6 +27,21 @@ const BEHAVIOR_DEFAULTS: BehaviorConfig = {
   customInstructions: "",
 };
 
+// ── Filesystem mount type ──────────────────────────────────
+
+export interface FilesystemMount {
+  /** Slug → virtual path /mnt/<name>; matches /^[a-z0-9-]+$/, unique per agent. */
+  name: string;
+  /** Host absolute path. A leading ~ is expanded at workspace-build time. */
+  path: string;
+  /** Read-only or read-write access to this mount. */
+  access: "ro" | "rw";
+  /** Human description shown to the agent in its prompt. */
+  description: string;
+  /** Mount kind — only "vault" is active; reserved for future "brain" support. */
+  kind: "vault";
+}
+
 // ── Key constants ───────────────────────────────────────────
 
 export const SETTINGS_KEYS = {
@@ -75,6 +90,9 @@ export const SETTINGS_KEYS = {
   TOOLS: "tools",
   SKILLS: "skills",
   MCP_SERVERS: "mcpServers",
+
+  // Filesystem mounts (external directories — Obsidian vaults, etc.)
+  FILESYSTEM_MOUNTS: "filesystem.mounts",
 
   // Conversation flow
   CONV_FLOW_ENABLED: "conversationFlow.enabled",
@@ -343,6 +361,20 @@ export class AgentSettings {
 
   getMcpServers(agentId: string): string[] {
     return this.store.getJson<string[]>(agentId, SETTINGS_KEYS.MCP_SERVERS) ?? [];
+  }
+
+  /** Per-agent filesystem mounts (external directories like Obsidian vaults). */
+  getMounts(agentId: string): FilesystemMount[] {
+    const raw = this.store.getJson<FilesystemMount[]>(agentId, SETTINGS_KEYS.FILESYSTEM_MOUNTS) ?? [];
+    if (!Array.isArray(raw)) return [];
+    return raw.filter(
+      (m): m is FilesystemMount =>
+        !!m &&
+        typeof m.name === "string" &&
+        typeof m.path === "string" &&
+        (m.access === "ro" || m.access === "rw") &&
+        m.kind === "vault",
+    );
   }
 
   // ── Conversation flow ───────────────────────────────────

@@ -408,6 +408,8 @@ Reserve modals for destructive confirmations only (delete agent, bulk delete cro
 
 **Addition**: Add a "Logs" tab that shows prompt traces filtered to this agent (from `/api/prompt-traces` filtered client-side or with a future `agent_id` param).
 
+**Capabilities nav group** includes a **Filesystem** tab for per-agent filesystem mounts. Each mount maps an external host directory (e.g. an Obsidian vault) to a virtual path `/mnt/<name>` inside the agent's Mastra workspace. Fields per mount: name (→ `/mnt/<name>`), host path, access mode (read-only / read-write), description. An inline indicator shows whether the host path currently exists on disk. Sub-agents inherit the parent agent's mounts automatically.
+
 ### Agent Creation Wizard (`/agents/new → persona → review`)
 
 **This is the "red thread" — the signature interaction.**

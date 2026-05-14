@@ -72,7 +72,7 @@ interface WebhookScenario {
   allowUnauthenticated?: boolean;
 }
 
-type TabId = "identity" | "model" | "memory" | "tools" | "subagents" | "crons" | "webhooks" | "telegram" | "proactive" | "runtime";
+type TabId = "identity" | "model" | "memory" | "tools" | "subagents" | "filesystem" | "crons" | "webhooks" | "telegram" | "proactive" | "runtime";
 
 const NAV_GROUPS: { label: string; items: { id: TabId; label: string }[] }[] = [
   {
@@ -88,6 +88,7 @@ const NAV_GROUPS: { label: string; items: { id: TabId; label: string }[] }[] = [
     items: [
       { id: "tools", label: "Tools / MCP / Skills" },
       { id: "subagents", label: "Sub-agents" },
+      { id: "filesystem", label: "Filesystem" },
       { id: "crons", label: "Schedules" },
     ],
   },
@@ -595,6 +596,180 @@ function ScenarioEditForm({ form, setForm, onSave, onCancel, saving, fields }: {
         </div>
       </div>
     </div>
+  );
+}
+
+// ── Filesystem Mounts Editor ─────────────────────────────────
+
+type Mount = { name: string; path: string; access: "ro" | "rw"; description: string; kind: "vault" };
+
+function MountsEditor({ agentId, settingsData, refetchSettings }: {
+  agentId: string;
+  settingsData: Record<string, string> | null;
+  refetchSettings: () => void;
+}) {
+  const [mounts, setMounts] = useState<Mount[]>([]);
+  const [newName, setNewName] = useState("");
+  const [newNameError, setNewNameError] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [pathStatus, setPathStatus] = useState<Record<number, "checking" | "ok" | "missing">>({});
+
+  useEffect(() => {
+    if (!settingsData) return;
+    if (settingsData["filesystem.mounts"]) {
+      try {
+        const parsed = JSON.parse(settingsData["filesystem.mounts"]);
+        if (Array.isArray(parsed)) setMounts(parsed);
+      } catch { /* ignore malformed JSON */ }
+    }
+  }, [settingsData]);
+
+  function updateMount(idx: number, patch: Partial<Mount>) {
+    setMounts(prev => prev.map((m, i) => (i === idx ? { ...m, ...patch } : m)));
+  }
+
+  function deleteMount(idx: number) {
+    setMounts(prev => prev.filter((_, i) => i !== idx));
+    setPathStatus(prev => {
+      const next: typeof prev = {};
+      Object.entries(prev).forEach(([k, v]) => {
+        const n = Number(k);
+        if (n < idx) next[n] = v;
+        else if (n > idx) next[n - 1] = v;
+        // n === idx is dropped
+      });
+      return next;
+    });
+  }
+
+  function addMount() {
+    const name = newName.trim().toLowerCase().replace(/[^a-z0-9-]/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, "");
+    if (!name) { setNewNameError("Enter a name first"); return; }
+    if (name === "workspace") { setNewNameError(`"workspace" is reserved`); return; }
+    if (mounts.some(m => m.name === name)) { setNewNameError(`"${name}" already exists`); return; }
+    setNewNameError("");
+    setMounts(prev => [...prev, { name, path: "", access: "rw", description: "", kind: "vault" }]);
+    setNewName("");
+  }
+
+  async function checkPath(idx: number, p: string) {
+    if (!p.trim()) {
+      setPathStatus(prev => {
+        const next = { ...prev };
+        delete next[idx];
+        return next;
+      });
+      return;
+    }
+    setPathStatus(prev => ({ ...prev, [idx]: "checking" }));
+    try {
+      const res = await fetch(`/api/platform/fs/exists?path=${encodeURIComponent(p)}`);
+      const data = await res.json();
+      setPathStatus(prev => ({ ...prev, [idx]: data.exists && data.isDirectory ? "ok" : "missing" }));
+    } catch {
+      setPathStatus(prev => ({ ...prev, [idx]: "missing" }));
+    }
+  }
+
+  async function saveAll() {
+    for (const m of mounts) {
+      if (!m.name || !/^[a-z0-9-]+$/.test(m.name)) { toast.error(`Invalid mount name "${m.name}"`); return; }
+      if (!m.path.trim()) { toast.error(`Mount "${m.name}" has no path`); return; }
+    }
+    setSaving(true);
+    try {
+      const res = await fetch(`/api/platform/agents/${agentId}/settings`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ "filesystem.mounts": mounts }),
+      });
+      if (res.ok) {
+        refetchSettings();
+        toast.success("Mounts saved — restart to apply");
+      } else {
+        toast.error("Failed to save mounts");
+      }
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <Card size="sm">
+      <CardHeader className="border-b">
+        <div className="flex items-center justify-between">
+          <CardTitle className="text-xs">Filesystem Mounts</CardTitle>
+          <span className="text-[9px] text-muted-foreground">restart required</span>
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <p className="text-[10px] text-muted-foreground leading-relaxed">
+          External directories (e.g. Obsidian vaults) the agent can read or write. Each mount appears to the agent at <code className="font-mono">/mnt/&lt;name&gt;</code>. Sub-agents inherit these mounts.
+        </p>
+
+        {mounts.map((m, idx) => (
+          <div key={idx} className="border border-border/60 rounded-md p-3 space-y-3 bg-card/30">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-mono">/mnt/{m.name}</span>
+              <Button size="sm" variant="ghost" className="h-5 text-[9px] px-1.5 text-destructive" onClick={() => deleteMount(idx)}>
+                Remove
+              </Button>
+            </div>
+            <div className="space-y-1.5">
+              <label className={labelClass}>Host path</label>
+              <input
+                value={m.path}
+                onChange={e => updateMount(idx, { path: e.target.value })}
+                onBlur={e => checkPath(idx, e.target.value)}
+                placeholder="/Users/you/Obsidian/Vault or ~/Obsidian/Vault"
+                className={`${inputClass} font-mono ${pathStatus[idx] === "missing" ? "!border-destructive" : pathStatus[idx] === "ok" ? "!border-green-600" : ""}`}
+              />
+              {pathStatus[idx] === "checking" && <p className="text-[9px] text-muted-foreground">Checking…</p>}
+              {pathStatus[idx] === "ok" && <p className="text-[9px] text-green-600">Directory exists</p>}
+              {pathStatus[idx] === "missing" && <p className="text-[9px] text-destructive">Not found or not a directory</p>}
+            </div>
+            <div className="space-y-1.5">
+              <label className={labelClass}>Access</label>
+              <select
+                value={m.access}
+                onChange={e => updateMount(idx, { access: e.target.value as "ro" | "rw" })}
+                className={`${inputClass} h-[38px]`}
+              >
+                <option value="rw">read-write</option>
+                <option value="ro">read-only</option>
+              </select>
+            </div>
+            <div className="space-y-1.5">
+              <label className={labelClass}>Description</label>
+              <input
+                value={m.description}
+                onChange={e => updateMount(idx, { description: e.target.value })}
+                placeholder="What the agent uses this mount for"
+                className={inputClass}
+              />
+            </div>
+          </div>
+        ))}
+
+        <div className="flex items-center gap-2 pt-1">
+          <div className="relative">
+            <input
+              value={newName}
+              onChange={e => { setNewName(e.target.value); setNewNameError(""); }}
+              onKeyDown={e => e.key === "Enter" && addMount()}
+              placeholder="mount-name"
+              className={`${inputClass} w-40 !py-1 !text-[11px] ${newNameError ? "!border-destructive" : ""}`}
+            />
+            {newNameError && <p className="absolute -bottom-4 left-0 text-[9px] text-destructive whitespace-nowrap">{newNameError}</p>}
+          </div>
+          <Button size="sm" variant="outline" onClick={addMount} className="h-6 text-[10px] px-2">Add Mount</Button>
+        </div>
+
+        <div className="flex justify-end pt-3">
+          <Button onClick={saveAll} disabled={saving} size="sm">{saving ? "Saving..." : "Save Mounts"}</Button>
+        </div>
+      </CardContent>
+    </Card>
   );
 }
 
@@ -2238,6 +2413,11 @@ export default function AgentEditPage({ params }: { params: Promise<{ id: string
             {/* ---- Webhooks ---- */}
             {tab === "webhooks" && (
               <WebhookScenariosTab agentId={id} scenariosData={scenariosData} refetchScenarios={refetchScenarios} />
+            )}
+
+            {/* ---- Filesystem ---- */}
+            {tab === "filesystem" && (
+              <MountsEditor agentId={id} settingsData={settingsData} refetchSettings={refetchSettings} />
             )}
 
             {/* ---- Telegram ---- */}
