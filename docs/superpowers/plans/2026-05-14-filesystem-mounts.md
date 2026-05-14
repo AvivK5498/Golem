@@ -13,7 +13,7 @@
 **Note on verification:** This project's owner tests manually and does not want new test files/frameworks. Do NOT add `*.test.ts` files. Verification per task is:
 - `npx tsc --noEmit -p tsconfig.json` — must be **clean** (the baseline passes; any error is yours).
 - `npx eslint <files this task changed>` — scoped to the task's own files. **Do not run `npm run lint`** — it lints the whole tree and `src/test-harness.ts` has **13 pre-existing `no-explicit-any` errors + 1 warning** unrelated to this work. Leave those alone (owner's rule: don't fix adjacent/pre-existing code). For every file *except* `src/test-harness.ts`, scoped eslint must be **0 errors**.
-- Task 7 modifies `src/test-harness.ts`: it must introduce **zero new** errors beyond that 13-error/1-warning baseline, and its commit needs `--no-verify` (the `lint-staged` pre-commit hook would otherwise block on the pre-existing errors). See Task 7 for specifics.
+- Task 7 modifies `src/test-harness.ts`, which is **gitignored** (`.gitignore` line 74) — a local-only dev tool, never tracked. Its `--mount` changes stay on disk, **uncommitted**. Verification is the Step 7/8 smoke tests (running the real harness), plus confirming zero new errors beyond the 13-error/1-warning eslint baseline.
 - Task 7 also runs the real test harness; Task 8/9 have live smoke checks.
 
 ---
@@ -1041,18 +1041,9 @@ npx tsx src/test-harness.ts --verbose --mount vault:/tmp/golem-mount-test:ro "Cr
 
 Expected: the `write_file` tool call returns a permission/read-only error in the verbose output; `/tmp/golem-mount-test/should-fail.md` does NOT exist (`ls /tmp/golem-mount-test` should not list it).
 
-- [ ] **Step 9: Commit**
+- [ ] **Step 9: Do NOT commit — `src/test-harness.ts` is gitignored**
 
-The `lint-staged` pre-commit hook runs `eslint --max-warnings 0` on staged files — it would block on `src/test-harness.ts`'s pre-existing baseline errors (not yours). Commit with `--no-verify` and call this out explicitly:
-
-```bash
-git add src/test-harness.ts
-git commit --no-verify -m "feat: add --mount flag to the agent test harness
-
-Committed with --no-verify: src/test-harness.ts has pre-existing
-no-explicit-any lint errors unrelated to this change; lint-staged would
-otherwise block. No new lint errors introduced by this commit."
-```
+`src/test-harness.ts` is intentionally gitignored (`.gitignore` line 74, under "# Tests"; also excluded from the npm package via `package.json` `files`). It is a local-only dev tool and is never tracked. The `--mount` changes therefore stay **on disk, uncommitted** — that is the correct end state. Do NOT `git add` or `git add -f` this file. The deliverable is the working file on disk, verified by the Step 7/8 smoke tests.
 
 ---
 
