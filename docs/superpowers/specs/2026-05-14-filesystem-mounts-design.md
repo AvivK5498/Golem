@@ -119,6 +119,20 @@ edit_file, list_files, grep) to work with them.
 
 Only rendered when the agent has ≥1 mount.
 
+### Test harness — `src/test-harness.ts`
+
+The harness builds a real Mastra agent and constructs its `Workspace` inline
+(`test-harness.ts:291-309`) — the same block that needs the mounts treatment. Two changes:
+
+- That workspace-construction block routes through the shared `buildAgentMounts()` helper
+  when mounts are present, so the harness exercises the **production** composite code path,
+  not a parallel one.
+- A new repeatable `--mount name:path:access` CLI flag, parsed into `FilesystemMount[]`
+  (e.g. `--mount nutrition:/Users/avivkaplan/Obsidian/Nutrition:rw`). `kind` defaults to
+  `"vault"`. Lets the operator point the harness at a real Obsidian vault and chat with the
+  agent against it. No assertions baked in — consistent with the harness's manual-testing
+  role.
+
 ### UI — agent detail page
 
 - New `TabId` `"filesystem"` added to the Capabilities group in `NAV_GROUPS`
@@ -151,6 +165,7 @@ Only rendered when the agent has ≥1 mount.
 | `src/agents/loader.ts` | Same branching for sub-agents; pass parent's mounts |
 | `src/platform/instructions.ts` | New "Filesystem Mounts" prompt section |
 | `src/server.ts` | `GET /api/platform/fs/exists` helper endpoint |
+| `src/test-harness.ts` | `--mount` flag + workspace block routed through `buildAgentMounts()` |
 | `ui/app/agents/[id]/page.tsx` | New "Filesystem" tab + `MountsEditor` component |
 
 ## Out of scope
@@ -164,6 +179,8 @@ Only rendered when the agent has ≥1 mount.
 
 ## Verification
 
-User tests manually. Automated smoke test possible via `src/test-harness.ts` (builds a
-real agent with the full pipeline): configure a mount, confirm the agent can
-`read_file`/`write_file` under `/mnt/<name>`, and confirm a `ro` mount rejects writes.
+Primary path is the test harness: `npx tsx src/test-harness.ts --mount
+nutrition:<real vault path>:rw "log my dinner"` — confirm the agent reads/writes under
+`/mnt/nutrition`, and that a `:ro` mount rejects writes. Because the harness now routes
+through `buildAgentMounts()`, this exercises the same composite-filesystem path the
+platform uses. User also tests manually against a live agent once the UI tab is wired.
