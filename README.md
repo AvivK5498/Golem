@@ -14,6 +14,7 @@ Built on [Mastra](https://mastra.ai) + [Vercel AI SDK](https://ai-sdk.dev). Supp
 - **Web UI** — Next.js control plane for managing agents, settings, schedules, and activity feeds
 - **Working memory** — Persistent scratchpad per agent that remembers preferences, facts, and context across conversations
 - **Skills & MCP** — Extend agents with markdown skill modules or Model Context Protocol servers
+- **Filesystem mounts** — Give agents read-only or read-write access to external directories (e.g. Obsidian vaults); each mount appears at `/mnt/<name>` and sub-agents inherit the parent's mounts
 - **Dual LLM providers** — OpenRouter (pay-per-token, 300+ models) and Codex (ChatGPT Plus/Pro subscription, subject to fair-use quota). Configure during onboarding or add later in the Providers page
 - **Conversation tempo** — Agents are aware of elapsed time between messages and adapt their responses accordingly (greetings, context freshness, stale references)
 - **Smart recall** — Window-based message history loading with token budgets, replacing static message caps
@@ -211,6 +212,7 @@ A standalone CLI for testing the full agent pipeline without Telegram:
 npm run test:agent "Hello, what can you do?"
 npm run test:agent -- --verbose "Run ls /tmp"
 npm run test:agent -- --image /path/to/image.jpg "What do you see?"
+npm run test:agent -- --mount vault:/path/to/dir:rw "Read and write files under /mnt/vault"
 ```
 
 Uses real LLM calls and reports to Phoenix observability.
