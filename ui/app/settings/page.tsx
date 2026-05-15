@@ -5,8 +5,13 @@ import { useState, useEffect } from "react";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { PageHeader } from "@/components/page-header";
 import { toast } from "sonner";
+import {
+  User as UserIcon,
+  Briefcase as BriefcaseIcon,
+  Plug as PlugIcon,
+  Shield as ShieldIcon,
+} from "lucide-react";
 import type { OpenRouterModel } from "@/lib/types";
 import { ModelCombobox } from "@/components/model-combobox";
 import {
@@ -116,60 +121,108 @@ export default function SettingsPage() {
     }
   }
 
-  const [tab, setTab] = useState<"platform" | "tiers" | "observability" | "webhooks" | "voice" | "security">("platform");
+  type SettingsTab = "platform" | "tiers" | "observability" | "webhooks" | "voice" | "security";
+  const [tab, setTab] = useState<SettingsTab>("platform");
 
-  const NAV_ITEMS: { id: typeof tab; label: string; group: string }[] = [
-    { id: "platform", label: "Platform", group: "General" },
-    { id: "tiers", label: "Model Tiers", group: "General" },
-    { id: "observability", label: "Observability", group: "Integrations" },
-    { id: "webhooks", label: "Webhooks", group: "Integrations" },
-    { id: "voice", label: "Voice Transcription", group: "Integrations" },
-    { id: "security", label: "Command Security", group: "Security" },
+  // Four user-task groups (You / Workspace / Integrations / Safety) replace
+  // the GENERAL/INTEGRATIONS/SECURITY taxonomy. Each top tab has 1+ sub-pages.
+  const SETTINGS_GROUPS: Array<{
+    id: "you" | "workspace" | "integrations" | "safety";
+    label: string;
+    icon: typeof UserIcon;
+    members: { id: SettingsTab; label: string }[];
+  }> = [
+    {
+      id: "you",
+      label: "You",
+      icon: UserIcon,
+      members: [{ id: "platform", label: "Profile" }],
+    },
+    {
+      id: "workspace",
+      label: "Workspace",
+      icon: BriefcaseIcon,
+      members: [
+        { id: "tiers", label: "Model tiers" },
+        { id: "voice", label: "Voice transcription" },
+      ],
+    },
+    {
+      id: "integrations",
+      label: "Integrations",
+      icon: PlugIcon,
+      members: [
+        { id: "observability", label: "Observability" },
+        { id: "webhooks", label: "Webhooks" },
+      ],
+    },
+    {
+      id: "safety",
+      label: "Safety",
+      icon: ShieldIcon,
+      members: [{ id: "security", label: "Command security" }],
+    },
   ];
 
-  const groups = [...new Set(NAV_ITEMS.map(i => i.group))];
+  const activeGroup =
+    SETTINGS_GROUPS.find((g) => g.members.some((m) => m.id === tab)) ?? SETTINGS_GROUPS[0];
 
   if (!settings) return <div className="p-6"><p className="text-sm text-muted-foreground">Loading...</p></div>;
 
   return (
     <div className="flex-1 overflow-y-auto">
       <div className="max-w-5xl mx-auto py-6 px-6">
-        <PageHeader
-          title="Settings"
-          breadcrumbs={[{ label: "Settings" }]}
-        />
+        <h1 className="text-[22px] font-semibold tracking-tight mb-6">Settings</h1>
 
-        <div className="flex gap-6">
-          {/* Left nav */}
-          <nav className="w-44 shrink-0">
-            <div className="rounded-xl border border-border/60 bg-card/40 p-3 space-y-4">
-              {groups.map(group => (
-                <div key={group}>
-                  <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider mb-1.5 px-2">
-                    {group}
-                  </p>
-                  <div className="space-y-0.5">
-                    {NAV_ITEMS.filter(i => i.group === group).map(item => (
-                      <button
-                        key={item.id}
-                        onClick={() => setTab(item.id)}
-                        className={`w-full text-left text-xs px-2 py-1.5 rounded-md transition-colors ${
-                          tab === item.id
-                            ? "bg-muted text-foreground font-medium"
-                            : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
-                        }`}
-                      >
-                        {item.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              ))}
-            </div>
+        {/* Top tab strip — 4 user-task groups */}
+        <div className="border-b border-border mb-4">
+          <nav className="flex gap-1 -mb-px">
+            {SETTINGS_GROUPS.map((group) => {
+              const active = group.id === activeGroup.id;
+              const Icon = group.icon;
+              return (
+                <button
+                  key={group.id}
+                  type="button"
+                  onClick={() => setTab(group.members[0].id)}
+                  className={`flex items-center gap-2 px-3 py-2.5 text-[13px] border-b-2 transition-colors ${
+                    active
+                      ? "border-[var(--primary)] text-foreground font-medium"
+                      : "border-transparent text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  <Icon size={14} />
+                  {group.label}
+                </button>
+              );
+            })}
           </nav>
+        </div>
 
-          {/* Right content */}
-          <div className="flex-1 min-w-0 space-y-4">
+        {/* Sub-pills — only when the active group has >1 member */}
+        {activeGroup.members.length > 1 && (
+          <div className="flex flex-wrap gap-1 mb-5">
+            {activeGroup.members.map((m) => {
+              const active = m.id === tab;
+              return (
+                <button
+                  key={m.id}
+                  type="button"
+                  onClick={() => setTab(m.id)}
+                  className={`text-[11px] px-2.5 py-1 rounded-md border transition-colors ${
+                    active
+                      ? "bg-[var(--brand-muted)] border-[var(--brand-muted)] text-[var(--brand-text)] font-medium"
+                      : "border-border text-muted-foreground hover:text-foreground hover:bg-muted/50"
+                  }`}
+                >
+                  {m.label}
+                </button>
+              );
+            })}
+          </div>
+        )}
+
+        <div className="space-y-4">
 
         {/* Platform */}
         {tab === "platform" && (
@@ -542,7 +595,6 @@ export default function SettingsPage() {
         </Card>
         )}
 
-          </div>
         </div>
       </div>
     </div>
