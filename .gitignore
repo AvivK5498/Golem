@@ -33,8 +33,9 @@ config/*
 .agents/
 sandbox/
 
-# Local scripts
+# Local scripts (track only specific reference scripts we want to ship)
 scripts/*
+!scripts/vultr-startup.sh
 
 # Personal content / legacy artifacts
 images_to_post/

@@ -1,37 +1,17 @@
 # Installing Golem
 
-Three paths. Pick the one that fits your situation.
+Two paths.
 
 | | When to use | Time |
 |---|---|---|
-| [Deploy on Vultr](#deploy-on-vultr-one-click) | You want a VPS and don't have one yet | 3 min |
-| [Manual VPS install](#manual-vps-install) | You have a server already (any provider) | 5 min |
+| [VPS install](#vps-install) | You want a long-running agent | 5 min |
 | [Local development](#local-development) | You want to hack on Golem itself | 5 min |
 
----
-
-## Deploy on Vultr (one-click)
-
-The [Deploy on Vultr badge in the README](../README.md) links to a pre-filled Vultr deploy page. The first-boot startup script (registered in the Vultr account that owns the badge) installs Node, runs `npm install -g golem-agent`, and runs `golem install-daemon` automatically. By the time you can SSH in, the daemon is already running.
-
-After the instance boots (~2 minutes):
-
-```bash
-# 1. SSH to confirm the bootstrap finished
-ssh root@<vps-ip>
-# (the MOTD will tell you Golem is running and what to do next)
-
-# 2. From your laptop in a separate terminal, open the tunnel
-ssh -L 3015:localhost:3015 root@<vps-ip>
-
-# 3. Open http://localhost:3015 in your browser and walk the wizard
-```
-
-The startup script source lives in [`scripts/vultr-startup.sh`](../scripts/vultr-startup.sh) — feel free to inspect it or fork it.
+If you don't have a VPS yet, [Vultr](https://www.vultr.com/?ref=9776627) is a good cheap option (~$5/mo for the 1GB plan, 30+ regions including Tel Aviv). That link gives you sign-up credit and supports development.
 
 ---
 
-## Manual VPS install
+## VPS install
 
 Works on any Linux VPS provider (Hetzner, DigitalOcean, AWS, Hetzner, etc.) running Ubuntu 22.04+, Debian 12+, or Fedora 40+.
 
