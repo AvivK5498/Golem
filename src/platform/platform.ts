@@ -970,12 +970,6 @@ function registerAgentTransport(
 export async function startPlatform(): Promise<PlatformContext> {
   console.log("[platform] starting multi-agent platform...");
   const dataDir = describeDataDirResolution();
-  const sourceLabel = {
-    env: "GOLEM_DATA_DIR env var",
-    cwd: "./data/ in current directory",
-    default: "OS default",
-  }[dataDir.source];
-  console.log(`[platform] data dir: ${dataDir.path}  (${sourceLabel})`);
   logger.info("platform starting", { dataDir: dataDir.path, dataDirSource: dataDir.source });
   const startedAt = Date.now();
 

@@ -5,6 +5,7 @@
  * platform writes its PID on first successful start, removes it on graceful
  * shutdown, and runs until SIGINT/SIGTERM.
  */
+import { detectSshSession, printFirstRunBanner } from "./first-run-banner.js";
 import { getRunningDaemon, removePidFile, writePidFile } from "./pid.js";
 
 export async function run(_args: string[]): Promise<number> {
@@ -17,10 +18,10 @@ export async function run(_args: string[]): Promise<number> {
     return 1;
   }
 
-  if (!process.env.OPENROUTER_API_KEY) {
-    console.log("\n  No OPENROUTER_API_KEY found — starting in onboarding mode.");
-    console.log("  Open http://localhost:3015 to configure your platform.\n");
-  }
+  printFirstRunBanner({
+    hasApiKey: Boolean(process.env.OPENROUTER_API_KEY),
+    ssh: detectSshSession(),
+  });
 
   const { startPlatform } = await import("../platform/platform.js");
 
