@@ -72,46 +72,76 @@ interface WebhookScenario {
   allowUnauthenticated?: boolean;
 }
 
+type TabGroup = "who" | "how" | "powers" | "channels";
 type TabId = "identity" | "model" | "memory" | "tools" | "subagents" | "filesystem" | "crons" | "webhooks" | "telegram" | "proactive" | "runtime";
 
-const NAV_GROUPS: { label: string; items: { id: TabId; label: string }[] }[] = [
+import { User, Brain, Wrench, Plug } from "lucide-react";
+
+/**
+ * Top-level navigation for the agent detail page.
+ *
+ * Four user-task groups (Who they are / How they think / What they can do /
+ * Where they live) replace the original GENERAL/CAPABILITIES/INTEGRATIONS/
+ * BEHAVIOR/RUNTIME taxonomy. Each group surfaces as a top-tab; its
+ * sub-pages collapse into a single content panel.
+ */
+const TAB_GROUPS: Array<{
+  id: TabGroup;
+  label: string;
+  icon: typeof User;
+  description: string;
+  members: TabId[];
+}> = [
   {
-    label: "General",
-    items: [
-      { id: "identity", label: "Identity" },
-      { id: "model", label: "Model" },
-      { id: "memory", label: "Memory" },
-    ],
+    id: "who",
+    label: "Who they are",
+    icon: User,
+    description: "Identity & voice",
+    members: ["identity"],
   },
   {
-    label: "Capabilities",
-    items: [
-      { id: "tools", label: "Tools / MCP / Skills" },
-      { id: "subagents", label: "Sub-agents" },
-      { id: "filesystem", label: "Filesystem" },
-      { id: "crons", label: "Schedules" },
-    ],
+    id: "how",
+    label: "How they think",
+    icon: Brain,
+    description: "Model, memory, behavior",
+    members: ["model", "memory", "proactive", "runtime"],
   },
   {
-    label: "Integrations",
-    items: [
-      { id: "webhooks", label: "Webhooks" },
-      { id: "telegram", label: "Telegram" },
-    ],
+    id: "powers",
+    label: "What they can do",
+    icon: Wrench,
+    description: "Tools, skills, sub-agents, filesystem",
+    members: ["tools", "subagents", "filesystem"],
   },
   {
-    label: "Behavior",
-    items: [
-      { id: "proactive", label: "Proactive" },
-    ],
-  },
-  {
-    label: "Runtime",
-    items: [
-      { id: "runtime", label: "Settings" },
-    ],
+    id: "channels",
+    label: "Where they live",
+    icon: Plug,
+    description: "Telegram, webhooks, schedules",
+    members: ["telegram", "webhooks", "crons"],
   },
 ];
+
+const SUB_TAB_LABELS: Record<TabId, string> = {
+  identity: "Identity",
+  model: "Model",
+  memory: "Memory",
+  proactive: "Proactive",
+  runtime: "Runtime",
+  tools: "Tools / MCP / Skills",
+  subagents: "Sub-agents",
+  filesystem: "Filesystem",
+  telegram: "Telegram",
+  webhooks: "Webhooks",
+  crons: "Schedules",
+};
+
+function groupForTab(tab: TabId): TabGroup {
+  for (const g of TAB_GROUPS) {
+    if (g.members.includes(tab)) return g.id;
+  }
+  return "who";
+}
 
 /** Displays the full prompt in labeled sections -- platform (read-only) + persona (editable) */
 function PromptSections({ agentId, persona, onPersonaChange, onSavePersona, subAgents, identity }: {
@@ -1719,53 +1749,84 @@ export default function AgentEditPage({ params }: { params: Promise<{ id: string
   const crons = cronsData?.crons || [];
   const subAgentEntries = Object.entries(data.subAgents?.agents || {});
 
+  const activeGroup = groupForTab(tab);
+  const activeGroupMeta = TAB_GROUPS.find((g) => g.id === activeGroup)!;
+
   return (
     <div className="flex-1 overflow-y-auto">
       <div className="max-w-5xl mx-auto py-6 px-6">
-        <PageHeader
-          title={name}
-          breadcrumbs={[
-            { label: "Agents", href: "/agents" },
-            { label: name || id },
-          ]}
-          actions={
-            <Badge variant="outline" className="text-[10px] text-muted-foreground border-border">
-              {id}
-            </Badge>
-          }
-        />
+        {/* Single page header — avatar + name + agent-id pill. No breadcrumb. */}
+        <div className="mb-6 flex items-center gap-3">
+          <Link
+            href="/agents"
+            className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+            aria-label="Back to agents"
+          >
+            ←
+          </Link>
+          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-[var(--brand-muted)] text-[var(--brand-text)] text-base font-bold">
+            {(name || id).charAt(0).toUpperCase()}
+          </div>
+          <div className="flex-1 min-w-0">
+            <h1 className="text-[22px] font-semibold tracking-tight leading-tight truncate">
+              {name || id}
+            </h1>
+            <p className="text-[11px] text-muted-foreground font-mono">{id}</p>
+          </div>
+        </div>
 
-        <div className="flex gap-6">
-          {/* Left nav */}
-          <nav className="w-48 shrink-0">
-            <div className="rounded-xl border border-border/60 bg-card/40 p-3 space-y-4">
-              {NAV_GROUPS.map(group => (
-                <div key={group.label}>
-                  <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider mb-1.5 px-2">
-                    {group.label}
-                  </p>
-                  <div className="space-y-0.5">
-                    {group.items.map(item => (
-                      <button
-                        key={item.id}
-                        onClick={() => setTab(item.id)}
-                        className={`w-full text-left text-xs px-2 py-1.5 rounded-md transition-colors ${
-                          tab === item.id
-                            ? "bg-muted text-foreground font-medium"
-                            : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
-                        }`}
-                      >
-                        {item.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              ))}
-            </div>
+        {/* Top tab strip — 4 user-task groups */}
+        <div className="border-b border-border mb-4">
+          <nav className="flex gap-1 -mb-px">
+            {TAB_GROUPS.map((group) => {
+              const active = group.id === activeGroup;
+              const Icon = group.icon;
+              // Clicking a top tab jumps to the first sub-page in that group
+              const firstMember = group.members[0];
+              return (
+                <button
+                  key={group.id}
+                  type="button"
+                  onClick={() => setTab(firstMember)}
+                  className={`flex items-center gap-2 px-3 py-2.5 text-[13px] border-b-2 transition-colors ${
+                    active
+                      ? "border-[var(--primary)] text-foreground font-medium"
+                      : "border-transparent text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  <Icon size={14} />
+                  {group.label}
+                </button>
+              );
+            })}
           </nav>
+        </div>
 
-          {/* Right content */}
-          <div className="flex-1 min-w-0 space-y-4">
+        {/* Sub-tabs (pill row) — only shows when the active group has >1 member */}
+        {activeGroupMeta.members.length > 1 && (
+          <div className="flex flex-wrap gap-1 mb-5">
+            {activeGroupMeta.members.map((m) => {
+              const active = m === tab;
+              return (
+                <button
+                  key={m}
+                  type="button"
+                  onClick={() => setTab(m)}
+                  className={`text-[11px] px-2.5 py-1 rounded-md border transition-colors ${
+                    active
+                      ? "bg-[var(--brand-muted)] border-[var(--brand-muted)] text-[var(--brand-text)] font-medium"
+                      : "border-border text-muted-foreground hover:text-foreground hover:bg-muted/50"
+                  }`}
+                >
+                  {SUB_TAB_LABELS[m]}
+                </button>
+              );
+            })}
+          </div>
+        )}
+
+        {/* Content column (no inner rail) */}
+        <div className="space-y-4">
 
             {/* ---- Identity ---- */}
             {tab === "identity" && (
@@ -2736,7 +2797,6 @@ export default function AgentEditPage({ params }: { params: Promise<{ id: string
             )}
 
           </div>
-        </div>
       </div>
     </div>
   );
