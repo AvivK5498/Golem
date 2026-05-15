@@ -88,3 +88,10 @@ summary.md
 # Personal logs — must never be committed
 Nutrition/
 daily-logs/
+
+# Project brain — its own nested git repo (docs/brain/)
+docs/brain/
+
+# Beads / Dolt files (added by bd init)
+.dolt/
+.beads-credential-key
