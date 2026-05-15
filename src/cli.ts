@@ -14,7 +14,17 @@
  *
  * Running with no subcommand is equivalent to `start`.
  */
-import "dotenv/config";
+// .env loading: support both layouts.
+//   - Dev clone:    .env lives in repo root (cwd when running `npm start`).
+//   - Installed:    .env lives in the data dir, written by the onboarding wizard
+//                   (the daemon's WorkingDirectory is the data dir, but `golem
+//                   doctor` from an interactive shell has cwd=$HOME and won't
+//                   find it). Loading both — cwd first so dev wins on conflict.
+import dotenv from "dotenv";
+import path from "node:path";
+import { getDataDir } from "./utils/paths.js";
+dotenv.config(); // cwd-relative .env
+dotenv.config({ path: path.join(getDataDir(), ".env"), override: false });
 
 type Subcommand = (args: string[]) => Promise<number>;
 
