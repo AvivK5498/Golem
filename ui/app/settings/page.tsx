@@ -226,127 +226,112 @@ export default function SettingsPage() {
 
         {/* Platform */}
         {tab === "platform" && (
-        <Card size="sm">
-          <CardHeader className="border-b">
-            <CardTitle className="text-xs">Platform</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="space-y-1.5">
-              <label className={labelClass}>Default Agent</label>
-              <select value={defaultAgent} onChange={e => setDefaultAgent(e.target.value)} className={inputClass}>
-                <option value="">Select...</option>
-                {(agentList?.agents || []).map(a => (
-                  <option key={a.id} value={a.id}>{a.name} ({a.id})</option>
-                ))}
-              </select>
-            </div>
-            <div className="flex justify-end">
-              <Button size="sm" onClick={() => saveSection("Platform", {
-                "global.defaultAgent": defaultAgent,
-              })} disabled={saving === "Platform"}>
-                {saving === "Platform" ? "Saving..." : "Save"}
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-
+        <section className="space-y-5">
+          <h3 className="text-title">Profile</h3>
+          <div className="space-y-1.5">
+            <label className={labelClass}>Default agent</label>
+            <select value={defaultAgent} onChange={e => setDefaultAgent(e.target.value)} className={inputClass}>
+              <option value="">Select…</option>
+              {(agentList?.agents || []).map(a => (
+                <option key={a.id} value={a.id}>{a.name} ({a.id})</option>
+              ))}
+            </select>
+            <p className="text-caption text-muted-foreground mt-1">
+              The default agent for direct messages and home composer routing.
+            </p>
+          </div>
+          <div className="flex justify-end pt-3 border-t border-border/60">
+            <Button onClick={() => saveSection("Platform", {
+              "global.defaultAgent": defaultAgent,
+            })} disabled={saving === "Platform"}>
+              {saving === "Platform" ? "Saving…" : "Save changes"}
+            </Button>
+          </div>
+        </section>
         )}
 
         {/* Model Tiers */}
         {tab === "tiers" && (
-        <Card size="sm">
-          <CardHeader className="border-b">
-            <CardTitle className="text-xs">Model Tiers</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <p className="text-[10px] text-muted-foreground">
+        <section className="space-y-5">
+          <div>
+            <h3 className="text-title">Model tiers</h3>
+            <p className="text-body-sm text-muted-foreground mt-1">
               Global model tiers shared by all agents. Per-agent tiers override these.
             </p>
-            <div className="grid grid-cols-3 gap-3">
-              <div className="space-y-1.5">
-                <label className={labelClass}>Low</label>
-                <ModelCombobox value={tierLow} onChange={setTierLow} models={modelsData?.models} label="" />
-              </div>
-              <div className="space-y-1.5">
-                <label className={labelClass}>Med</label>
-                <ModelCombobox value={tierMed} onChange={setTierMed} models={modelsData?.models} label="" />
-              </div>
-              <div className="space-y-1.5">
-                <label className={labelClass}>High</label>
-                <ModelCombobox value={tierHigh} onChange={setTierHigh} models={modelsData?.models} label="" />
-              </div>
+          </div>
+          <div className="grid grid-cols-3 gap-4">
+            <div className="space-y-1.5">
+              <label className={labelClass}>Low</label>
+              <ModelCombobox value={tierLow} onChange={setTierLow} models={modelsData?.models} label="" />
             </div>
             <div className="space-y-1.5">
-              <label className={labelClass}>Nano Model (classification, utilities)</label>
-              <ModelCombobox value={nanoModel} onChange={setNanoModel} models={modelsData?.models} label="" />
+              <label className={labelClass}>Med</label>
+              <ModelCombobox value={tierMed} onChange={setTierMed} models={modelsData?.models} label="" />
             </div>
-            <div className="flex justify-end">
-              <Button size="sm" onClick={() => saveSection("Model Tiers", {
-                "global.llm.tiers": JSON.stringify({ low: tierLow, med: tierMed, high: tierHigh }),
-                "global.llm.nanoModel": nanoModel,
-              })} disabled={saving === "Model Tiers"}>
-                {saving === "Model Tiers" ? "Saving..." : "Save"}
-              </Button>
+            <div className="space-y-1.5">
+              <label className={labelClass}>High</label>
+              <ModelCombobox value={tierHigh} onChange={setTierHigh} models={modelsData?.models} label="" />
             </div>
-          </CardContent>
-        </Card>
-
+          </div>
+          <div className="space-y-1.5">
+            <label className={labelClass}>Nano model <span className="text-muted-foreground/70 normal-case tracking-normal">— classification, utilities</span></label>
+            <ModelCombobox value={nanoModel} onChange={setNanoModel} models={modelsData?.models} label="" />
+          </div>
+          <div className="flex justify-end pt-3 border-t border-border/60">
+            <Button onClick={() => saveSection("Model Tiers", {
+              "global.llm.tiers": JSON.stringify({ low: tierLow, med: tierMed, high: tierHigh }),
+              "global.llm.nanoModel": nanoModel,
+            })} disabled={saving === "Model Tiers"}>
+              {saving === "Model Tiers" ? "Saving…" : "Save changes"}
+            </Button>
+          </div>
+        </section>
         )}
 
         {/* Observability */}
         {tab === "observability" && (
-        <Card size="sm">
-          <CardHeader className="border-b">
-            <div className="flex items-center justify-between">
-              <CardTitle className="text-xs">Observability (Phoenix)</CardTitle>
-              <Badge variant="outline" className="text-[9px] border-border">restart required</Badge>
+        <section className="space-y-5">
+          <div className="flex items-baseline justify-between gap-2">
+            <h3 className="text-title">Observability <span className="text-body-sm font-normal text-muted-foreground">Phoenix</span></h3>
+            <span className="text-caption text-muted-foreground">restart required</span>
+          </div>
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input type="checkbox" checked={obsEnabled} onChange={e => setObsEnabled(e.target.checked)} />
+            <span className="text-body-sm">Enable Phoenix tracing</span>
+          </label>
+          {obsEnabled && (
+            <div className="space-y-3">
+              <div className="space-y-1.5">
+                <label className={labelClass}>Endpoint</label>
+                <input value={obsEndpoint} onChange={e => setObsEndpoint(e.target.value)} placeholder="http://localhost:6006/v1/traces" className={inputClass} />
+              </div>
+              <div className="space-y-1.5">
+                <label className={labelClass}>Project name</label>
+                <input value={obsProject} onChange={e => setObsProject(e.target.value)} placeholder="golem-agent" className={inputClass} />
+              </div>
             </div>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <label className="flex items-center gap-2 cursor-pointer">
-              <input type="checkbox" checked={obsEnabled} onChange={e => setObsEnabled(e.target.checked)}
-                className="rounded border-border bg-accent" />
-              <span className="text-xs">Enable Phoenix tracing</span>
-            </label>
-            {obsEnabled && (
-              <>
-                <div className="space-y-1.5">
-                  <label className={labelClass}>Endpoint</label>
-                  <input value={obsEndpoint} onChange={e => setObsEndpoint(e.target.value)} placeholder="http://localhost:6006/v1/traces" className={inputClass} />
-                </div>
-                <div className="space-y-1.5">
-                  <label className={labelClass}>Project Name</label>
-                  <input value={obsProject} onChange={e => setObsProject(e.target.value)} placeholder="golem-agent" className={inputClass} />
-                </div>
-              </>
-            )}
-            <div className="flex justify-end">
-              <Button size="sm" onClick={() => saveSection("Observability", {
-                "global.observability.enabled": obsEnabled,
-                "global.observability.endpoint": obsEndpoint,
-                "global.observability.projectName": obsProject,
-              })} disabled={saving === "Observability"}>
-                {saving === "Observability" ? "Saving..." : "Save"}
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-
+          )}
+          <div className="flex justify-end pt-3 border-t border-border/60">
+            <Button onClick={() => saveSection("Observability", {
+              "global.observability.enabled": obsEnabled,
+              "global.observability.endpoint": obsEndpoint,
+              "global.observability.projectName": obsProject,
+            })} disabled={saving === "Observability"}>
+              {saving === "Observability" ? "Saving…" : "Save changes"}
+            </Button>
+          </div>
+        </section>
         )}
 
         {/* Webhooks */}
         {tab === "webhooks" && (
-        <Card size="sm">
-          <CardHeader className="border-b">
-            <CardTitle className="text-xs">Webhooks</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <label className="flex items-center gap-2 cursor-pointer">
-              <input type="checkbox" checked={whEnabled} onChange={e => setWhEnabled(e.target.checked)}
-                className="rounded border-border bg-accent" />
-              <span className="text-xs">Enable webhook endpoints</span>
-            </label>
-            {whEnabled && (
+        <section className="space-y-5">
+          <h3 className="text-title">Webhooks</h3>
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input type="checkbox" checked={whEnabled} onChange={e => setWhEnabled(e.target.checked)} />
+            <span className="text-body-sm">Enable webhook endpoints</span>
+          </label>
+          {whEnabled && (
               <>
                 <div className="space-y-1.5">
                   <label className={labelClass}>Token</label>
@@ -419,92 +404,82 @@ export default function SettingsPage() {
                 </div>
               </>
             )}
-            <div className="flex justify-end">
-              <Button size="sm" onClick={() => saveSection("Webhooks", {
-                "global.webhooks.enabled": whEnabled,
-                "global.webhooks.token": whToken,
-              })} disabled={saving === "Webhooks"}>
-                {saving === "Webhooks" ? "Saving..." : "Save"}
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-
+          <div className="flex justify-end pt-3 border-t border-border/60">
+            <Button onClick={() => saveSection("Webhooks", {
+              "global.webhooks.enabled": whEnabled,
+              "global.webhooks.token": whToken,
+            })} disabled={saving === "Webhooks"}>
+              {saving === "Webhooks" ? "Saving…" : "Save changes"}
+            </Button>
+          </div>
+        </section>
         )}
 
         {/* Voice Transcription */}
         {tab === "voice" && (
-        <Card size="sm">
-          <CardHeader className="border-b">
-            <CardTitle className="text-xs">Voice Transcription</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <label className="flex items-center gap-2 cursor-pointer">
-              <input type="checkbox" checked={whisperEnabled} onChange={e => setWhisperEnabled(e.target.checked)}
-                className="rounded border-border bg-accent" />
-              <span className="text-xs">Enable voice transcription</span>
-            </label>
-            {whisperEnabled && (
-              <>
-                <div className="space-y-1.5">
-                  <label className={labelClass}>API Key</label>
-                  <input type="password" value={whisperApiKey} onChange={e => setWhisperApiKey(e.target.value)} placeholder="${GROQ_API_KEY}" className={`${inputClass} font-mono`} />
-                  <p className="text-[10px] text-muted-foreground">
-                    Groq API key or env var reference. <a href="https://console.groq.com/keys" target="_blank" rel="noopener noreferrer" className="text-[var(--brand-text)] hover:underline">Get a free key</a>
-                  </p>
-                </div>
-                <button
-                  onClick={() => setShowWhisperAdvanced(!showWhisperAdvanced)}
-                  className="text-[10px] text-muted-foreground hover:text-foreground transition-colors"
-                >
-                  {showWhisperAdvanced ? "Hide advanced" : "Advanced settings"}
-                </button>
-                {showWhisperAdvanced && (
-                  <div className="space-y-3">
+        <section className="space-y-5">
+          <h3 className="text-title">Voice transcription</h3>
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input type="checkbox" checked={whisperEnabled} onChange={e => setWhisperEnabled(e.target.checked)} />
+            <span className="text-body-sm">Enable voice transcription</span>
+          </label>
+          {whisperEnabled && (
+            <div className="space-y-4">
+              <div className="space-y-1.5">
+                <label className={labelClass}>API key</label>
+                <input type="password" value={whisperApiKey} onChange={e => setWhisperApiKey(e.target.value)} placeholder="${GROQ_API_KEY}" className={`${inputClass} font-mono`} />
+                <p className="text-caption text-muted-foreground">
+                  Groq API key or env var reference. <a href="https://console.groq.com/keys" target="_blank" rel="noopener noreferrer" className="text-[var(--brand-text)] hover:underline">Get a free key</a>
+                </p>
+              </div>
+              <button
+                onClick={() => setShowWhisperAdvanced(!showWhisperAdvanced)}
+                className="text-body-sm text-muted-foreground hover:text-foreground transition-colors"
+              >
+                {showWhisperAdvanced ? "Hide advanced" : "Show advanced settings"}
+              </button>
+              {showWhisperAdvanced && (
+                <div className="space-y-3">
+                  <div className="space-y-1.5">
+                    <label className={labelClass}>Endpoint</label>
+                    <input value={whisperEndpoint} onChange={e => setWhisperEndpoint(e.target.value)} placeholder="https://api.groq.com/openai/v1/audio/transcriptions" className={`${inputClass} font-mono`} />
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-1.5">
-                      <label className={labelClass}>Endpoint</label>
-                      <input value={whisperEndpoint} onChange={e => setWhisperEndpoint(e.target.value)} placeholder="https://api.groq.com/openai/v1/audio/transcriptions" className={`${inputClass} font-mono`} />
+                      <label className={labelClass}>Model</label>
+                      <input value={whisperModel} onChange={e => setWhisperModel(e.target.value)} placeholder="whisper-large-v3-turbo" className={`${inputClass} font-mono`} />
                     </div>
-                    <div className="grid grid-cols-2 gap-3">
-                      <div className="space-y-1.5">
-                        <label className={labelClass}>Model</label>
-                        <input value={whisperModel} onChange={e => setWhisperModel(e.target.value)} placeholder="whisper-large-v3-turbo" className={`${inputClass} font-mono`} />
-                      </div>
-                      <div className="space-y-1.5">
-                        <label className={labelClass}>Timeout (ms)</label>
-                        <input value={whisperTimeout} onChange={e => setWhisperTimeout(e.target.value)} className={numberInputClass} />
-                      </div>
+                    <div className="space-y-1.5">
+                      <label className={labelClass}>Timeout (ms)</label>
+                      <input value={whisperTimeout} onChange={e => setWhisperTimeout(e.target.value)} className={numberInputClass} />
                     </div>
                   </div>
-                )}
-              </>
-            )}
-            <div className="flex justify-end">
-              <Button size="sm" onClick={() => saveSection("Whisper", {
-                "global.whisper.enabled": whisperEnabled,
-                "global.whisper.apiKey": whisperApiKey,
-                "global.whisper.endpoint": whisperEndpoint,
-                "global.whisper.model": whisperModel,
-                "global.whisper.timeoutMs": whisperTimeout,
-              })} disabled={saving === "Whisper"}>
-                {saving === "Whisper" ? "Saving..." : "Save"}
-              </Button>
+                </div>
+              )}
             </div>
-          </CardContent>
-        </Card>
-
+          )}
+          <div className="flex justify-end pt-3 border-t border-border/60">
+            <Button onClick={() => saveSection("Whisper", {
+              "global.whisper.enabled": whisperEnabled,
+              "global.whisper.apiKey": whisperApiKey,
+              "global.whisper.endpoint": whisperEndpoint,
+              "global.whisper.model": whisperModel,
+              "global.whisper.timeoutMs": whisperTimeout,
+            })} disabled={saving === "Whisper"}>
+              {saving === "Whisper" ? "Saving…" : "Save changes"}
+            </Button>
+          </div>
+        </section>
         )}
 
         {/* Command Security */}
         {tab === "security" && (
-        <Card size="sm">
-          <CardHeader className="border-b">
-            <CardTitle className="text-xs">Command Security</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <p className="text-[10px] text-muted-foreground">
-              Only binaries in this list can be executed by agents via the run_command tool. Read-only tools (grep, find, cat, ls, sort, head, tail) are always available.
-            </p>
+        <section className="space-y-5">
+          <h3 className="text-title">Command security</h3>
+          <p className="text-body-sm text-muted-foreground">
+            Only binaries in this list can be executed by agents via the <code className="font-mono">run_command</code> tool.
+            Read-only tools (grep, find, cat, ls, sort, head, tail) are always available.
+          </p>
 
             {/* Current allowed binaries as chips */}
             {allowedBinaries.length > 0 && (
@@ -584,15 +559,14 @@ export default function SettingsPage() {
               </div>
             )}
 
-            <div className="flex justify-end">
-              <Button size="sm" onClick={() => saveSection("CommandSecurity", {
-                "global.runCommand.allowedBinaries": JSON.stringify(allowedBinaries),
-              })} disabled={saving === "CommandSecurity"}>
-                {saving === "CommandSecurity" ? "Saving..." : "Save"}
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
+          <div className="flex justify-end pt-3 border-t border-border/60">
+            <Button onClick={() => saveSection("CommandSecurity", {
+              "global.runCommand.allowedBinaries": JSON.stringify(allowedBinaries),
+            })} disabled={saving === "CommandSecurity"}>
+              {saving === "CommandSecurity" ? "Saving…" : "Save changes"}
+            </Button>
+          </div>
+        </section>
         )}
 
         </div>

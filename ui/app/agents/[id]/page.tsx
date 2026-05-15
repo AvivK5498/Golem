@@ -340,147 +340,142 @@ function WebhookScenariosTab({ agentId, scenariosData, refetchScenarios }: {
     saveScenarios(selected, updated);
   }
 
-  if (!scenariosData) return <p className="text-[10px] text-muted-foreground">Loading...</p>;
+  if (!scenariosData) return <p className="text-body-sm text-muted-foreground">Loading…</p>;
 
   return (
-    <>
-      {/* Source selector */}
-      <Card size="sm">
-        <CardHeader className="border-b">
-          <div className="flex items-center justify-between">
-            <CardTitle className="text-xs">Webhook Sources</CardTitle>
-            <div className="flex items-center gap-2">
-              <input
-                value={newSourceName}
-                onChange={e => setNewSourceName(e.target.value)}
-                onKeyDown={e => e.key === "Enter" && addSource()}
-                placeholder="new-source"
-                className={`${inputClass} w-32 !py-1 !text-[11px]`}
-              />
-              <Button size="sm" variant="outline" onClick={addSource} className="h-6 text-[10px] px-2">
-                Add
-              </Button>
-            </div>
+    <div className="space-y-8">
+      {/* ── SOURCES ── */}
+      <section className="space-y-4 pb-2 border-b border-border/40">
+        <div className="flex items-baseline justify-between gap-3">
+          <div>
+            <h3 className="text-title">
+              Webhook sources
+              <span className="ml-2 text-body-sm font-normal text-muted-foreground">{sourceNames.length} configured</span>
+            </h3>
+            <p className="text-body-sm text-muted-foreground mt-1">
+              External services that POST to this agent. Each source has scenarios that route incoming payloads.
+            </p>
           </div>
-        </CardHeader>
-        <CardContent>
-          {sourceNames.length === 0 ? (
-            <p className="text-[10px] text-muted-foreground py-2">No webhook sources configured. Add one above.</p>
-          ) : (
-            <div className="flex flex-wrap gap-1.5">
-              {sourceNames.map(src => (
+          <div className="flex items-end gap-2">
+            <input
+              value={newSourceName}
+              onChange={e => setNewSourceName(e.target.value)}
+              onKeyDown={e => e.key === "Enter" && addSource()}
+              placeholder="new-source"
+              className={`${inputClass} w-44`}
+            />
+            <Button variant="outline" onClick={addSource}>Add</Button>
+          </div>
+        </div>
+        {sourceNames.length === 0 ? (
+          <p className="text-body-sm text-muted-foreground py-6 text-center border border-dashed border-border rounded-xl">
+            No webhook sources yet. Add one above.
+          </p>
+        ) : (
+          <div className="flex flex-wrap gap-2">
+            {sourceNames.map(src => {
+              const isActive = selected === src;
+              return (
                 <button
                   key={src}
+                  type="button"
                   onClick={() => setActiveSource(src)}
-                  className={`inline-flex items-center gap-1 text-[11px] px-2.5 py-1 rounded-md border transition-colors ${
-                    selected === src
-                      ? "bg-muted text-foreground border-border font-medium"
-                      : "text-muted-foreground border-transparent hover:bg-muted/50 hover:border-border/50"
+                  className={`inline-flex items-center gap-1.5 text-body-sm px-3 py-1.5 rounded-md border transition-colors outline-none focus:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+                    isActive
+                      ? "bg-[var(--primary)] border-[var(--primary)] text-[var(--primary-foreground)] font-medium"
+                      : "border-border text-muted-foreground hover:text-foreground hover:bg-muted/50"
                   }`}
                 >
                   {src}
-                  <span className="text-[9px] text-muted-foreground">({(sources[src] || []).length})</span>
+                  <span className={`text-caption ${isActive ? "text-[var(--primary-foreground)]/80" : "text-muted-foreground"}`}>
+                    ({(sources[src] || []).length})
+                  </span>
                 </button>
-              ))}
-            </div>
-          )}
-        </CardContent>
-      </Card>
+              );
+            })}
+          </div>
+        )}
+      </section>
 
-      {/* Scenarios for selected source */}
+      {/* ── SCENARIOS ── */}
       {selected && (
-        <>
-          <Card size="sm">
-            <CardHeader className="border-b">
-              <div className="flex items-center justify-between">
-                <CardTitle className="text-xs">{selected} scenarios</CardTitle>
-                <div className="flex items-center gap-2">
-                  <Button size="sm" variant="outline" onClick={startAdd} className="h-6 text-[10px] px-2">
-                    + Add Scenario
-                  </Button>
-                  <Button size="sm" variant="outline" onClick={() => deleteSource(selected)} className="h-6 text-[10px] px-2 text-destructive hover:text-destructive">
-                    Delete Source
-                  </Button>
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              {scenarios.length === 0 && editingIdx === null && (
-                <p className="text-[10px] text-muted-foreground py-2">No scenarios yet. Add one to start routing webhooks.</p>
-              )}
-
-              {scenarios.map((s, idx) => (
-                <div key={idx} className={`rounded-lg border p-3 space-y-2 ${s.enabled ? "border-border" : "border-border/40 opacity-60"}`}>
-                  {editingIdx === idx ? (
-                    <ScenarioEditForm form={editForm} setForm={setEditForm} onSave={saveEdit} onCancel={cancelEdit} saving={saving} fields={payloadFields} />
-                  ) : (
-                    <>
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <span className="text-xs font-medium">{s.name}</span>
-                          {!s.enabled && <Badge variant="outline" className="text-[9px]">disabled</Badge>}
-                          {s.allowUnauthenticated && <Badge variant="outline" className="text-[9px] border-[var(--status-warning)]/40 text-[var(--status-warning)]">no auth</Badge>}
-                        </div>
-                        <div className="flex items-center gap-1">
-                          <Button size="sm" variant="ghost" onClick={() => toggleEnabled(idx)} className="h-5 text-[9px] px-1.5">
-                            {s.enabled ? "Disable" : "Enable"}
-                          </Button>
-                          <Button size="sm" variant="ghost" onClick={() => toggleAllowUnauth(idx)} className="h-5 text-[9px] px-1.5">
-                            {s.allowUnauthenticated ? "Require Auth" : "Allow Unauth"}
-                          </Button>
-                          <Button size="sm" variant="ghost" onClick={() => startEdit(idx)} className="h-5 text-[9px] px-1.5">
-                            Edit
-                          </Button>
-                          <Button size="sm" variant="ghost" onClick={() => deleteScenario(idx)} className="h-5 text-[9px] px-1.5 text-destructive hover:text-destructive">
-                            Delete
-                          </Button>
-                        </div>
-                      </div>
-                      <div className="text-[10px] space-y-1">
-                        <p><span className="text-muted-foreground">When:</span> {s.when}</p>
-                        <p className="whitespace-pre-wrap"><span className="text-muted-foreground">Then:</span> {s.then}</p>
-                      </div>
-                    </>
-                  )}
-                </div>
-              ))}
-
-              {/* Inline add form */}
-              {editingIdx === -1 && (
-                <div className="rounded-lg border border-dashed border-border p-3">
+        <section className="space-y-4 pb-2 border-b border-border/40">
+          <div className="flex items-baseline justify-between gap-2">
+            <h3 className="text-title">
+              {selected} <span className="text-body-sm font-normal text-muted-foreground">scenarios</span>
+            </h3>
+            <div className="flex items-center gap-2">
+              <Button variant="outline" onClick={startAdd}>+ Add scenario</Button>
+              <Button variant="ghost" onClick={() => deleteSource(selected)} className="text-destructive hover:text-destructive hover:bg-destructive/5">
+                Delete source
+              </Button>
+            </div>
+          </div>
+          {scenarios.length === 0 && editingIdx === null && (
+            <p className="text-body-sm text-muted-foreground py-6 text-center border border-dashed border-border rounded-xl">
+              No scenarios yet. Add one to start routing webhooks.
+            </p>
+          )}
+          <div className="space-y-3">
+            {scenarios.map((s, idx) => (
+              <div key={idx} className={`rounded-xl border bg-card p-4 space-y-2 ${s.enabled ? "border-border" : "border-border/40 opacity-60"}`}>
+                {editingIdx === idx ? (
                   <ScenarioEditForm form={editForm} setForm={setEditForm} onSave={saveEdit} onCancel={cancelEdit} saving={saving} fields={payloadFields} />
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
-          {/* Webhook URL */}
-          <Card size="sm">
-            <CardHeader className="border-b">
-              <CardTitle className="text-xs">Webhook URL</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="flex items-center gap-2">
-                <code className="flex-1 text-[11px] font-mono text-muted-foreground bg-card/60 border border-border rounded-md px-3 py-2 select-all">
-                  {webhookPath}
-                </code>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="h-7 text-[10px] px-2 shrink-0"
-                  onClick={() => { navigator.clipboard.writeText(webhookPath); toast.success("Copied"); }}
-                >
-                  Copy
-                </Button>
+                ) : (
+                  <>
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <span className="text-[13px] font-semibold">{s.name}</span>
+                        {!s.enabled && <Badge variant="outline" className="text-caption">disabled</Badge>}
+                        {s.allowUnauthenticated && <Badge variant="outline" className="text-caption border-[var(--status-warning)]/40 text-[var(--status-warning)]">no auth</Badge>}
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <Button variant="ghost" onClick={() => toggleEnabled(idx)}>{s.enabled ? "Disable" : "Enable"}</Button>
+                        <Button variant="ghost" onClick={() => toggleAllowUnauth(idx)}>{s.allowUnauthenticated ? "Require auth" : "Allow unauth"}</Button>
+                        <Button variant="ghost" onClick={() => startEdit(idx)}>Edit</Button>
+                        <Button variant="ghost" onClick={() => deleteScenario(idx)} className="text-destructive hover:text-destructive hover:bg-destructive/5">
+                          Delete
+                        </Button>
+                      </div>
+                    </div>
+                    <div className="text-body-sm space-y-1">
+                      <p><span className="text-muted-foreground">When:</span> {s.when}</p>
+                      <p className="whitespace-pre-wrap"><span className="text-muted-foreground">Then:</span> {s.then}</p>
+                    </div>
+                  </>
+                )}
               </div>
-              <p className="text-[10px] text-muted-foreground mt-2">
-                POST JSON payload. Auth via <code className="text-[10px]">Authorization: Bearer &lt;token&gt;</code> or <code className="text-[10px]">X-Golem-Token</code> header.
-              </p>
-            </CardContent>
-          </Card>
-        </>
+            ))}
+            {editingIdx === -1 && (
+              <div className="rounded-xl border border-dashed border-border p-4">
+                <ScenarioEditForm form={editForm} setForm={setEditForm} onSave={saveEdit} onCancel={cancelEdit} saving={saving} fields={payloadFields} />
+              </div>
+            )}
+          </div>
+        </section>
       )}
-    </>
+
+      {/* ── WEBHOOK URL ── */}
+      {selected && (
+        <section className="space-y-3">
+          <h3 className="text-title">Webhook URL</h3>
+          <div className="flex items-center gap-2">
+            <code className="flex-1 text-[12px] font-mono text-muted-foreground bg-card/60 border border-border rounded-md px-3 py-2 select-all">
+              {webhookPath}
+            </code>
+            <Button
+              variant="outline"
+              onClick={() => { navigator.clipboard.writeText(webhookPath); toast.success("Copied"); }}
+            >
+              Copy
+            </Button>
+          </div>
+          <p className="text-body-sm text-muted-foreground">
+            POST JSON payload. Auth via <code className="font-mono">Authorization: Bearer &lt;token&gt;</code> or <code className="font-mono">X-Golem-Token</code> header.
+          </p>
+        </section>
+      )}
+    </div>
   );
 }
 
@@ -725,81 +720,96 @@ function MountsEditor({ agentId, settingsData, refetchSettings }: {
   }
 
   return (
-    <Card size="sm">
-      <CardHeader className="border-b">
-        <div className="flex items-center justify-between">
-          <CardTitle className="text-xs">Filesystem Mounts</CardTitle>
-          <span className="text-[9px] text-muted-foreground">restart required</span>
-        </div>
-      </CardHeader>
-      <CardContent className="space-y-3">
-        <p className="text-[10px] text-muted-foreground leading-relaxed">
-          External directories (e.g. Obsidian vaults) the agent can read or write. Each mount appears to the agent at <code className="font-mono">/mnt/&lt;name&gt;</code>. Sub-agents inherit these mounts.
-        </p>
-
-        {mounts.map((m, idx) => (
-          <div key={idx} className="border border-border/60 rounded-md p-3 space-y-3 bg-card/30">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-mono">/mnt/{m.name}</span>
-              <Button size="sm" variant="ghost" className="h-5 text-[9px] px-1.5 text-destructive" onClick={() => deleteMount(idx)}>
-                Remove
-              </Button>
-            </div>
-            <div className="space-y-1.5">
-              <label className={labelClass}>Host path</label>
-              <input
-                value={m.path}
-                onChange={e => updateMount(idx, { path: e.target.value })}
-                onBlur={e => checkPath(idx, e.target.value)}
-                placeholder="/Users/you/Obsidian/Vault or ~/Obsidian/Vault"
-                className={`${inputClass} font-mono ${pathStatus[idx] === "missing" ? "!border-destructive" : pathStatus[idx] === "ok" ? "!border-green-600" : ""}`}
-              />
-              {pathStatus[idx] === "checking" && <p className="text-[9px] text-muted-foreground">Checking…</p>}
-              {pathStatus[idx] === "ok" && <p className="text-[9px] text-green-600">Directory exists</p>}
-              {pathStatus[idx] === "missing" && <p className="text-[9px] text-destructive">Not found or not a directory</p>}
-            </div>
-            <div className="space-y-1.5">
-              <label className={labelClass}>Access</label>
-              <select
-                value={m.access}
-                onChange={e => updateMount(idx, { access: e.target.value as "ro" | "rw" })}
-                className={`${inputClass} h-[38px]`}
-              >
-                <option value="rw">read-write</option>
-                <option value="ro">read-only</option>
-              </select>
-            </div>
-            <div className="space-y-1.5">
-              <label className={labelClass}>Description</label>
-              <input
-                value={m.description}
-                onChange={e => updateMount(idx, { description: e.target.value })}
-                placeholder="What the agent uses this mount for"
-                className={inputClass}
-              />
-            </div>
+    <div className="space-y-8">
+      <section className="space-y-4">
+        <div className="flex items-baseline justify-between gap-3">
+          <div>
+            <h3 className="text-title">
+              Filesystem mounts
+              <span className="ml-2 text-body-sm font-normal text-muted-foreground">{mounts.length} configured</span>
+            </h3>
+            <p className="text-body-sm text-muted-foreground mt-1 leading-relaxed">
+              External directories (e.g. Obsidian vaults) the agent can read or write.
+              Each mount appears to the agent at <code className="font-mono">/mnt/&lt;name&gt;</code>.
+              Sub-agents inherit these mounts.
+            </p>
           </div>
-        ))}
-
-        <div className="flex items-center gap-2 pt-1">
-          <div className="relative">
-            <input
-              value={newName}
-              onChange={e => { setNewName(e.target.value); setNewNameError(""); }}
-              onKeyDown={e => e.key === "Enter" && addMount()}
-              placeholder="mount-name"
-              className={`${inputClass} w-40 !py-1 !text-[11px] ${newNameError ? "!border-destructive" : ""}`}
-            />
-            {newNameError && <p className="absolute -bottom-4 left-0 text-[9px] text-destructive whitespace-nowrap">{newNameError}</p>}
+          <div className="flex items-end gap-2">
+            <div className="flex flex-col gap-1">
+              <input
+                value={newName}
+                onChange={(e) => { setNewName(e.target.value); setNewNameError(""); }}
+                onKeyDown={(e) => e.key === "Enter" && addMount()}
+                placeholder="mount-name"
+                className={`${inputClass} w-44 ${newNameError ? "!border-destructive" : ""}`}
+              />
+              {newNameError && <p className="text-[10px] text-destructive">{newNameError}</p>}
+            </div>
+            <Button variant="outline" onClick={addMount}>Add</Button>
           </div>
-          <Button size="sm" variant="outline" onClick={addMount} className="h-6 text-[10px] px-2">Add Mount</Button>
         </div>
+      </section>
 
-        <div className="flex justify-end pt-3">
-          <Button onClick={saveAll} disabled={saving} size="sm">{saving ? "Saving..." : "Save Mounts"}</Button>
-        </div>
-      </CardContent>
-    </Card>
+      <section className="space-y-3">
+        {mounts.length === 0 ? (
+          <p className="text-body-sm text-muted-foreground py-6 text-center border border-dashed border-border rounded-xl">
+            No mounts yet. Add one above.
+          </p>
+        ) : (
+          mounts.map((m, idx) => (
+            <div key={idx} className="rounded-xl border border-border bg-card p-5 space-y-4">
+              <div className="flex items-center justify-between">
+                <span className="text-[13px] font-semibold font-mono">/mnt/{m.name}</span>
+                <Button variant="ghost" onClick={() => deleteMount(idx)} className="text-destructive hover:text-destructive hover:bg-destructive/5">
+                  Remove
+                </Button>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1.5 col-span-2">
+                  <label className={labelClass}>Host path</label>
+                  <input
+                    value={m.path}
+                    onChange={(e) => updateMount(idx, { path: e.target.value })}
+                    onBlur={(e) => checkPath(idx, e.target.value)}
+                    placeholder="/Users/you/Obsidian/Vault or ~/Obsidian/Vault"
+                    className={`${inputClass} font-mono ${pathStatus[idx] === "missing" ? "!border-destructive" : pathStatus[idx] === "ok" ? "!border-[var(--status-success)]" : ""}`}
+                  />
+                  {pathStatus[idx] === "checking" && <p className="text-caption text-muted-foreground">Checking…</p>}
+                  {pathStatus[idx] === "ok" && <p className="text-caption text-[var(--status-success)]">Directory exists</p>}
+                  {pathStatus[idx] === "missing" && <p className="text-caption text-destructive">Not found or not a directory</p>}
+                </div>
+                <div className="space-y-1.5">
+                  <label className={labelClass}>Access</label>
+                  <select
+                    value={m.access}
+                    onChange={(e) => updateMount(idx, { access: e.target.value as "ro" | "rw" })}
+                    className={`${inputClass} h-[38px]`}
+                  >
+                    <option value="rw">read-write</option>
+                    <option value="ro">read-only</option>
+                  </select>
+                </div>
+                <div className="space-y-1.5">
+                  <label className={labelClass}>Description</label>
+                  <input
+                    value={m.description}
+                    onChange={(e) => updateMount(idx, { description: e.target.value })}
+                    placeholder="What the agent uses this for"
+                    className={inputClass}
+                  />
+                </div>
+              </div>
+            </div>
+          ))
+        )}
+      </section>
+
+      <div className="flex items-center justify-end pt-3 border-t border-border/60">
+        <Button onClick={saveAll} disabled={saving}>
+          {saving ? "Saving…" : "Save mounts"}
+        </Button>
+      </div>
+    </div>
   );
 }
 
@@ -1222,129 +1232,103 @@ function ProactiveTab({ agentId, settingsData, refetchSettings }: {
   }
 
   return (
-    <>
-      <Card size="sm">
-        <CardHeader className="border-b">
-          <div className="flex items-center justify-between">
-            <CardTitle className="text-xs">Proactive Check-ins</CardTitle>
-            <Badge variant="outline" className="text-[9px] border-border">live</Badge>
-          </div>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="rounded-md bg-muted/30 border border-border/50 p-3 space-y-1.5">
-            <p className="text-[10px] text-muted-foreground leading-relaxed">
-              When enabled, this agent will occasionally review its conversation history and decide on its own whether to follow up with you — like a real coach or advisor checking in.
-            </p>
-            <p className="text-[10px] text-muted-foreground leading-relaxed">
-              Check-ins happen at randomized intervals (not on a fixed schedule) during active hours. The agent may decide there&apos;s nothing worth following up on and stay silent. You&apos;ll only hear from it when it has something relevant to say.
-            </p>
-            <p className="text-[10px] text-muted-foreground/60">
-              Off by default. Each check costs one agent turn (~500-2000 tokens).
-            </p>
-          </div>
-
-          <label className="flex items-center gap-2 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={enabled}
-              onChange={e => setEnabled(e.target.checked)}
-              className="rounded border-border bg-accent"
-            />
-            <span className="text-xs">Enable proactive check-ins</span>
-          </label>
-        </CardContent>
-      </Card>
+    <div className="space-y-8">
+      {/* ── INTRO + ENABLE ── */}
+      <section className="space-y-4 pb-2 border-b border-border/40">
+        <div className="flex items-baseline justify-between gap-2">
+          <h3 className="text-title">Proactive check-ins</h3>
+          <span className="text-caption text-muted-foreground">live</span>
+        </div>
+        <p className="text-body-sm text-muted-foreground leading-relaxed">
+          When enabled, this agent reviews its history at randomized intervals and decides on its own whether to follow up with you — like a coach or advisor checking in. Off by default. Each check costs one agent turn (~500–2000 tokens).
+        </p>
+        <label className="flex items-center gap-2 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={enabled}
+            onChange={(e) => setEnabled(e.target.checked)}
+          />
+          <span className="text-body-sm">Enable proactive check-ins</span>
+        </label>
+      </section>
 
       {enabled && (
         <>
-          <Card size="sm">
-            <CardHeader className="border-b">
-              <CardTitle className="text-xs">Timing</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-1">
-                  <label className={labelClass}>Min Interval</label>
-                  <p className="text-[10px] text-muted-foreground/70">Earliest next check</p>
-                  <div className="flex items-center gap-1.5">
-                    <input type="number" value={minH} onChange={e => setMinH(Number(e.target.value))} min={0} max={48} className={numberInputClass} />
-                    <span className="text-[10px] text-muted-foreground">h</span>
-                    <input type="number" value={minM} onChange={e => setMinM(Number(e.target.value))} min={0} max={59} step={5} className={numberInputClass} />
-                    <span className="text-[10px] text-muted-foreground">m</span>
-                  </div>
-                </div>
-                <div className="space-y-1">
-                  <label className={labelClass}>Max Interval</label>
-                  <p className="text-[10px] text-muted-foreground/70">Latest next check</p>
-                  <div className="flex items-center gap-1.5">
-                    <input type="number" value={maxH} onChange={e => setMaxH(Number(e.target.value))} min={0} max={48} className={numberInputClass} />
-                    <span className="text-[10px] text-muted-foreground">h</span>
-                    <input type="number" value={maxM} onChange={e => setMaxM(Number(e.target.value))} min={0} max={59} step={5} className={numberInputClass} />
-                    <span className="text-[10px] text-muted-foreground">m</span>
-                  </div>
-                </div>
-              </div>
-              <div className="space-y-1">
-                <label className={labelClass}>Min Gap</label>
-                <p className="text-[10px] text-muted-foreground/70">Won&apos;t check in if you interacted within this time</p>
+          {/* ── TIMING ── */}
+          <section className="space-y-4 pb-2 border-b border-border/40">
+            <h3 className="text-title">Timing</h3>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <label className={labelClass}>Min interval <span className="text-muted-foreground/70 normal-case tracking-normal">— earliest next check</span></label>
                 <div className="flex items-center gap-1.5">
-                  <input type="number" value={gapH} onChange={e => setGapH(Number(e.target.value))} min={0} max={48} className={numberInputClass} />
-                  <span className="text-[10px] text-muted-foreground">h</span>
-                  <input type="number" value={gapM} onChange={e => setGapM(Number(e.target.value))} min={0} max={59} step={5} className={numberInputClass} />
-                  <span className="text-[10px] text-muted-foreground">m</span>
+                  <input type="number" value={minH} onChange={(e) => setMinH(Number(e.target.value))} min={0} max={48} className={numberInputClass} />
+                  <span className="text-caption text-muted-foreground">h</span>
+                  <input type="number" value={minM} onChange={(e) => setMinM(Number(e.target.value))} min={0} max={59} step={5} className={numberInputClass} />
+                  <span className="text-caption text-muted-foreground">m</span>
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-1">
-                  <label className={labelClass}>Active Hours Start</label>
-                  <input type="time" value={activeStart} onChange={e => setActiveStart(e.target.value)} className={inputClass} />
-                </div>
-                <div className="space-y-1">
-                  <label className={labelClass}>Active Hours End</label>
-                  <input type="time" value={activeEnd} onChange={e => setActiveEnd(e.target.value)} className={inputClass} />
+              <div className="space-y-1.5">
+                <label className={labelClass}>Max interval <span className="text-muted-foreground/70 normal-case tracking-normal">— latest next check</span></label>
+                <div className="flex items-center gap-1.5">
+                  <input type="number" value={maxH} onChange={(e) => setMaxH(Number(e.target.value))} min={0} max={48} className={numberInputClass} />
+                  <span className="text-caption text-muted-foreground">h</span>
+                  <input type="number" value={maxM} onChange={(e) => setMaxM(Number(e.target.value))} min={0} max={59} step={5} className={numberInputClass} />
+                  <span className="text-caption text-muted-foreground">m</span>
                 </div>
               </div>
-            </CardContent>
-          </Card>
+              <div className="space-y-1.5 col-span-2">
+                <label className={labelClass}>Min gap <span className="text-muted-foreground/70 normal-case tracking-normal">— won&apos;t check in if you interacted within this time</span></label>
+                <div className="flex items-center gap-1.5 w-1/2">
+                  <input type="number" value={gapH} onChange={(e) => setGapH(Number(e.target.value))} min={0} max={48} className={numberInputClass} />
+                  <span className="text-caption text-muted-foreground">h</span>
+                  <input type="number" value={gapM} onChange={(e) => setGapM(Number(e.target.value))} min={0} max={59} step={5} className={numberInputClass} />
+                  <span className="text-caption text-muted-foreground">m</span>
+                </div>
+              </div>
+              <div className="space-y-1.5">
+                <label className={labelClass}>Active hours start</label>
+                <input type="time" value={activeStart} onChange={(e) => setActiveStart(e.target.value)} className={inputClass} />
+              </div>
+              <div className="space-y-1.5">
+                <label className={labelClass}>Active hours end</label>
+                <input type="time" value={activeEnd} onChange={(e) => setActiveEnd(e.target.value)} className={inputClass} />
+              </div>
+            </div>
+          </section>
 
-          <Card size="sm">
-            <CardHeader className="border-b">
-              <CardTitle className="text-xs">Behavior</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="space-y-1">
-                <label className={labelClass}>Probability (0-1)</label>
-                <p className="text-[10px] text-muted-foreground/70">Chance of proceeding past the random gate each check. Lower = less frequent.</p>
-                <input
-                  type="number"
-                  value={probability}
-                  onChange={e => setProbability(e.target.value)}
-                  min={0} max={1} step={0.1}
-                  className={numberInputClass}
-                />
-              </div>
-              <div className="space-y-1">
-                <label className={labelClass}>Custom Prompt (optional)</label>
-                <p className="text-[10px] text-muted-foreground/70">Override the default check-in prompt. Leave empty to use the built-in prompt.</p>
-                <textarea
-                  value={prompt}
-                  onChange={e => setPrompt(e.target.value)}
-                  rows={4}
-                  placeholder="You have a chance to check in with the user proactively..."
-                  className={`${inputClass} resize-y font-mono`}
-                />
-              </div>
-            </CardContent>
-          </Card>
+          {/* ── BEHAVIOR ── */}
+          <section className="space-y-4 pb-2 border-b border-border/40">
+            <h3 className="text-title">Behavior</h3>
+            <div className="space-y-1.5">
+              <label className={labelClass}>Probability <span className="text-muted-foreground/70 normal-case tracking-normal">— 0 to 1, lower = less frequent</span></label>
+              <input
+                type="number"
+                value={probability}
+                onChange={(e) => setProbability(e.target.value)}
+                min={0} max={1} step={0.1}
+                className={`${numberInputClass} w-32`}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <label className={labelClass}>Custom prompt <span className="text-muted-foreground/70 normal-case tracking-normal">— optional override</span></label>
+              <textarea
+                value={prompt}
+                onChange={(e) => setPrompt(e.target.value)}
+                rows={4}
+                placeholder="Leave empty to use the built-in prompt."
+                className={`${inputClass} resize-y font-mono`}
+              />
+            </div>
+          </section>
         </>
       )}
 
-      <div className="sticky bottom-0 bg-background/80 backdrop-blur-sm border-t border-border -mx-6 px-6 py-3 flex justify-end">
-        <Button onClick={saveAll} disabled={saving} size="sm">
-          {saving ? "Saving..." : "Save"}
+      <div className="flex items-center justify-end pt-3 border-t border-border/60">
+        <Button onClick={saveAll} disabled={saving}>
+          {saving ? "Saving…" : "Save changes"}
         </Button>
       </div>
-    </>
+    </div>
   );
 }
 
@@ -2144,141 +2128,130 @@ export default function AgentEditPage({ params }: { params: Promise<{ id: string
 
             {/* ---- Memory ---- */}
             {tab === "memory" && (
-              <>
-                <Card size="sm">
-                  <CardHeader className="border-b">
-                    <div className="flex items-center justify-between">
-                      <CardTitle className="text-xs">Memory Settings</CardTitle>
-                      <Badge variant="outline" className="text-[9px] border-border">live</Badge>
-                    </div>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    {/* Static context window + working memory */}
-                    <div className="space-y-3">
-                      <div className="flex flex-col gap-1.5">
-                        <label className={labelClass}>Last Messages (context window)</label>
-                        <input type="number" value={lastMessages} onChange={e => setLastMessages(Number(e.target.value))} min={1} max={50} disabled={smartRecallEnabled} className={numberInputClass} />
-                        {smartRecallEnabled && (
-                          <p className="text-[9px] text-muted-foreground">Overridden per-turn by Smart Recall (below).</p>
-                        )}
-                      </div>
-                      <label className="flex items-center gap-2 cursor-pointer">
-                        <input type="checkbox" checked={wmEnabled} onChange={e => setWmEnabled(e.target.checked)}
-                          className="rounded border-border bg-accent accent-teal-500" />
-                        <span className="text-[10px] text-muted-foreground">Working Memory</span>
-                      </label>
-                    </div>
-
-                    {/* Visual separator between static cap and smart recall */}
-                    <div className="border-t border-border/60" />
-
-                    {/* Smart Recall — window-aware override */}
-                    <div className="space-y-3">
-                      <div className="flex items-center justify-between">
-                        <label className="flex items-center gap-2 cursor-pointer">
-                          <input type="checkbox" checked={smartRecallEnabled} onChange={e => setSmartRecallEnabled(e.target.checked)}
-                            className="rounded border-border bg-accent accent-teal-500" />
-                          <span className="text-[10px] font-medium text-foreground">Smart Recall</span>
-                        </label>
-                      </div>
-                      <p className="text-[10px] text-muted-foreground">
-                        Window-aware history loading. Counts messages in the last <span className="font-mono">N</span> days, clamps between Min/Max, and trims by token budget. Overrides the Last Messages cap above when enabled.
-                      </p>
-                      <div className={`grid grid-cols-2 gap-3 ${!smartRecallEnabled ? "opacity-50 pointer-events-none" : ""}`}>
-                        <div className="flex flex-col gap-1.5">
-                          <label className={labelClass}>Window (days)</label>
-                          <input type="number" value={smartRecallWindowDays} onChange={e => setSmartRecallWindowDays(Number(e.target.value))} min={1} max={365} className={numberInputClass} />
-                        </div>
-                        <div className="flex flex-col gap-1.5">
-                          <label className={labelClass}>Max tokens</label>
-                          <input type="number" value={smartRecallMaxTokens} onChange={e => setSmartRecallMaxTokens(Number(e.target.value))} min={0} max={200000} step={100} className={numberInputClass} />
-                        </div>
-                        <div className="flex flex-col gap-1.5">
-                          <label className={labelClass}>Min messages</label>
-                          <input type="number" value={smartRecallMin} onChange={e => setSmartRecallMin(Number(e.target.value))} min={0} max={500} className={numberInputClass} />
-                        </div>
-                        <div className="flex flex-col gap-1.5">
-                          <label className={labelClass}>Max messages</label>
-                          <input type="number" value={smartRecallMax} onChange={e => setSmartRecallMax(Number(e.target.value))} min={1} max={500} className={numberInputClass} />
-                        </div>
-                      </div>
+              <div className="space-y-8">
+                {/* ── CONTEXT ── */}
+                <section className="space-y-4 pb-2 border-b border-border/40">
+                  <div className="flex items-baseline justify-between gap-2">
+                    <h3 className="text-title">Context window</h3>
+                    <span className="text-caption text-muted-foreground">live</span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="flex flex-col gap-1.5">
+                      <label className={labelClass}>Last messages</label>
+                      <input type="number" value={lastMessages} onChange={e => setLastMessages(Number(e.target.value))} min={1} max={50} disabled={smartRecallEnabled} className={numberInputClass} />
                       {smartRecallEnabled && (
-                        <p className="text-[9px] text-muted-foreground">
-                          Max tokens of <span className="font-mono">0</span> disables the token cap (only message-count limits apply).
-                        </p>
+                        <p className="text-caption text-muted-foreground">Overridden per-turn by Smart Recall below.</p>
                       )}
                     </div>
+                  </div>
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input type="checkbox" checked={wmEnabled} onChange={e => setWmEnabled(e.target.checked)} />
+                    <span className="text-body-sm">Enable working memory</span>
+                  </label>
+                </section>
 
-                    <div className="flex justify-end pt-2">
-                      <Button onClick={saveMemorySettings} disabled={saving} size="sm">{saving ? "Saving..." : "Save Memory Settings"}</Button>
-                    </div>
-                  </CardContent>
-                </Card>
-
-                <Card size="sm">
-                  <CardHeader className="border-b">
-                    <div className="flex items-center justify-between">
-                      <CardTitle className="text-xs">Conversation Tempo</CardTitle>
-                      <Badge variant="outline" className="text-[9px] border-border">live</Badge>
-                    </div>
-                  </CardHeader>
-                  <CardContent className="space-y-3">
-                    <p className="text-[10px] text-muted-foreground">
-                      Injects a discrete tempo signal (active / recent / stale / cold) into the system prompt so the agent picks up cold conversations naturally and doesn&apos;t treat stale time references as live.
-                    </p>
+                {/* ── SMART RECALL ── */}
+                <section className="space-y-4 pb-2 border-b border-border/40">
+                  <div className="flex items-baseline justify-between gap-2">
+                    <h3 className="text-title">Smart recall</h3>
                     <label className="flex items-center gap-2 cursor-pointer">
-                      <input type="checkbox" checked={tempoEnabled} onChange={e => setTempoEnabled(e.target.checked)}
-                        className="rounded border-border bg-accent accent-teal-500" />
-                      <span className="text-[10px] text-muted-foreground">Enable tempo awareness</span>
+                      <input type="checkbox" checked={smartRecallEnabled} onChange={e => setSmartRecallEnabled(e.target.checked)} />
+                      <span className="text-body-sm">Enabled</span>
                     </label>
-                  </CardContent>
-                </Card>
-
-                <Card size="sm">
-                  <CardHeader className="border-b">
-                    <div className="flex items-center justify-between">
-                      <CardTitle className="text-xs">Memory Template</CardTitle>
-                      <span className="text-[9px] text-muted-foreground">restart required</span>
+                  </div>
+                  <p className="text-body-sm text-muted-foreground">
+                    Window-aware history loading. Counts messages in the last N days, clamps between Min/Max, trims by token budget. Overrides the Last messages cap above when enabled.
+                  </p>
+                  <div className={`grid grid-cols-2 gap-4 ${!smartRecallEnabled ? "opacity-50 pointer-events-none" : ""}`}>
+                    <div className="flex flex-col gap-1.5">
+                      <label className={labelClass}>Window (days)</label>
+                      <input type="number" value={smartRecallWindowDays} onChange={e => setSmartRecallWindowDays(Number(e.target.value))} min={1} max={365} className={numberInputClass} />
                     </div>
-                  </CardHeader>
-                  <CardContent className="space-y-3">
-                    <p className="text-[10px] text-muted-foreground">
-                      This template defines the initial structure for the agent&apos;s working memory. The actual memory content is managed by the agent at runtime.
-                    </p>
-                    <AutoTextarea value={memoryTemplate} onChange={e => setMemoryTemplate(e.target.value)} minRows={6} maxHeight={500} className="font-mono text-[11px]" />
-                    <Button onClick={() => saveMarkdown("memory-template", memoryTemplate)} size="sm">Save Template</Button>
-                  </CardContent>
-                </Card>
-
-                <Card size="sm">
-                  <CardHeader className="border-b">
-                    <div className="flex items-center justify-between">
-                      <CardTitle className="text-xs">Working Memory (live)</CardTitle>
-                      <span className="text-[9px] text-muted-foreground">picked up on next turn</span>
+                    <div className="flex flex-col gap-1.5">
+                      <label className={labelClass}>Max tokens</label>
+                      <input type="number" value={smartRecallMaxTokens} onChange={e => setSmartRecallMaxTokens(Number(e.target.value))} min={0} max={200000} step={100} className={numberInputClass} />
                     </div>
-                  </CardHeader>
-                  <CardContent className="space-y-3">
-                    <p className="text-[10px] text-muted-foreground">
-                      Current working memory content for this agent. Edit to correct facts, trim stale data, or manually update what the agent knows. Changes apply on the agent&apos;s next turn — no restart needed.
+                    <div className="flex flex-col gap-1.5">
+                      <label className={labelClass}>Min messages</label>
+                      <input type="number" value={smartRecallMin} onChange={e => setSmartRecallMin(Number(e.target.value))} min={0} max={500} className={numberInputClass} />
+                    </div>
+                    <div className="flex flex-col gap-1.5">
+                      <label className={labelClass}>Max messages</label>
+                      <input type="number" value={smartRecallMax} onChange={e => setSmartRecallMax(Number(e.target.value))} min={1} max={500} className={numberInputClass} />
+                    </div>
+                  </div>
+                  {smartRecallEnabled && (
+                    <p className="text-caption text-muted-foreground">
+                      Max tokens of <span className="font-mono">0</span> disables the token cap (only message-count limits apply).
                     </p>
-                    <AutoTextarea
-                      value={workingMemoryContent}
-                      onChange={e => setWorkingMemoryContent(e.target.value)}
-                      minRows={6}
-                      maxHeight={500}
-                      className="font-mono text-[11px]"
-                      placeholder={workingMemoryLoading ? "Loading..." : "Working memory is empty — the agent hasn't written anything yet."}
-                    />
+                  )}
+                </section>
+
+                {/* ── TEMPO ── */}
+                <section className="space-y-4 pb-2 border-b border-border/40">
+                  <div className="flex items-baseline justify-between gap-2">
+                    <h3 className="text-title">Conversation tempo</h3>
+                    <span className="text-caption text-muted-foreground">live</span>
+                  </div>
+                  <p className="text-body-sm text-muted-foreground">
+                    Injects a discrete tempo signal (active / recent / stale / cold) into the system prompt so the agent picks up cold conversations naturally.
+                  </p>
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input type="checkbox" checked={tempoEnabled} onChange={e => setTempoEnabled(e.target.checked)} />
+                    <span className="text-body-sm">Enable tempo awareness</span>
+                  </label>
+                </section>
+
+                {/* ── TEMPLATE ── */}
+                <section className="space-y-3 pb-2 border-b border-border/40">
+                  <div className="flex items-baseline justify-between gap-2">
+                    <h3 className="text-title">Memory template</h3>
+                    <span className="text-caption text-muted-foreground">restart required</span>
+                  </div>
+                  <p className="text-body-sm text-muted-foreground">
+                    Initial structure for the agent&apos;s working memory. The agent manages the actual memory content at runtime.
+                  </p>
+                  <AutoTextarea value={memoryTemplate} onChange={e => setMemoryTemplate(e.target.value)} minRows={6} maxHeight={500} className="font-mono text-[11px]" />
+                  <div className="flex justify-end">
+                    <Button variant="outline" onClick={() => saveMarkdown("memory-template", memoryTemplate)}>Save template</Button>
+                  </div>
+                </section>
+
+                {/* ── WORKING MEMORY ── */}
+                <section className="space-y-3">
+                  <div className="flex items-baseline justify-between gap-2">
+                    <h3 className="text-title">Working memory <span className="text-body-sm font-normal text-muted-foreground">live</span></h3>
+                    <span className="text-caption text-muted-foreground">picked up on next turn</span>
+                  </div>
+                  <p className="text-body-sm text-muted-foreground">
+                    Current working memory for this agent. Edit to correct facts, trim stale data, or update what the agent knows.
+                  </p>
+                  <AutoTextarea
+                    value={workingMemoryContent}
+                    onChange={e => setWorkingMemoryContent(e.target.value)}
+                    minRows={6}
+                    maxHeight={500}
+                    className="font-mono text-[11px]"
+                    placeholder={workingMemoryLoading ? "Loading..." : "Working memory is empty — the agent hasn't written anything yet."}
+                  />
+                  <div className="flex items-center justify-between">
+                    <span className="text-caption text-muted-foreground tabular-nums">
+                      {workingMemoryContent.length} chars
+                    </span>
                     <div className="flex items-center gap-2">
-                      <Button onClick={saveWorkingMemory} size="sm" disabled={workingMemoryLoading}>Save</Button>
-                      <Button onClick={loadWorkingMemory} size="sm" variant="outline" disabled={workingMemoryLoading}>Refresh</Button>
-                      <span className="text-[9px] text-muted-foreground font-mono tabular-nums">
-                        {workingMemoryContent.length} chars
-                      </span>
+                      <Button variant="outline" onClick={loadWorkingMemory} disabled={workingMemoryLoading}>Refresh</Button>
+                      <Button onClick={saveWorkingMemory} disabled={workingMemoryLoading}>Save working memory</Button>
                     </div>
-                  </CardContent>
-                </Card>
-              </>
+                  </div>
+                </section>
+
+                {/* Single Save anchor for the settings-driven sections */}
+                <div className="flex items-center justify-end pt-3 border-t border-border/60">
+                  <Button onClick={saveMemorySettings} disabled={saving}>
+                    {saving ? "Saving…" : "Save memory settings"}
+                  </Button>
+                </div>
+              </div>
             )}
 
             {/* ---- Tools / MCP / Skills ---- */}
@@ -2482,36 +2455,43 @@ export default function AgentEditPage({ params }: { params: Promise<{ id: string
 
             {/* ---- Schedules ---- */}
             {tab === "crons" && (
-              <Card size="sm">
-                <CardHeader className="border-b">
-                  <div className="flex items-center gap-2">
-                    <CardTitle className="text-xs">Schedules</CardTitle>
-                    <span className="text-[10px] text-muted-foreground">({crons.length} total)</span>
-                  </div>
-                </CardHeader>
-                <CardContent className="space-y-1">
-                  {crons.length === 0 && <p className="text-[10px] text-muted-foreground">No schedules for this agent.</p>}
-                  {crons.map(cron => (
-                    <div key={cron.id} className="flex items-center gap-3 py-1.5 border-b border-border/50 last:border-0">
-                      <span className={`w-1.5 h-1.5 rounded-full ${cron.paused ? "bg-muted-foreground" : "bg-[var(--status-success)]"}`} />
-                      <span className="text-xs text-foreground flex-1 truncate">{cron.name}</span>
-                      <span className="text-[10px] text-muted-foreground tabular-nums">{cron.cron_expr}</span>
-                      <Badge className={`text-[9px] border-0 ${cron.task_kind === "agent_turn" ? "bg-[var(--chart-4)]/10 text-[var(--chart-4)]" : "bg-[var(--status-info-bg)] text-[var(--status-info)]"}`}>
-                        {cron.task_kind}
-                      </Badge>
+              <div className="space-y-6">
+                <section className="space-y-4">
+                  <div className="flex items-baseline justify-between gap-2">
+                    <h3 className="text-title">
+                      Schedules
+                      <span className="ml-2 text-body-sm font-normal text-muted-foreground">{crons.length} total</span>
+                    </h3>
+                    <div className="flex items-center gap-3 text-body-sm">
+                      <Link href={`/schedules/new?agent_id=${id}`} className="text-[var(--brand-text)] hover:underline">
+                        + Add schedule
+                      </Link>
+                      <span className="text-muted-foreground">·</span>
+                      <Link href="/schedules" className="text-muted-foreground hover:text-foreground">
+                        All schedules
+                      </Link>
                     </div>
-                  ))}
-                  <div className="flex items-center gap-2 mt-2">
-                    <Link href={`/schedules/new?agent_id=${id}`} className="text-[10px] text-muted-foreground hover:text-foreground underline">
-                      + Add schedule for this agent
-                    </Link>
-                    <span className="text-[10px] text-muted-foreground">|</span>
-                    <Link href="/schedules" className="text-[10px] text-muted-foreground hover:text-foreground">
-                      All schedules
-                    </Link>
                   </div>
-                </CardContent>
-              </Card>
+                  {crons.length === 0 ? (
+                    <p className="text-body-sm text-muted-foreground py-6 text-center border border-dashed border-border rounded-xl">
+                      No schedules for this agent yet.
+                    </p>
+                  ) : (
+                    <div className="divide-y divide-border/50 rounded-xl border border-border bg-card">
+                      {crons.map((cron) => (
+                        <div key={cron.id} className="flex items-center gap-3 px-4 py-3">
+                          <span className={`w-2 h-2 rounded-full ${cron.paused ? "bg-muted-foreground" : "bg-[var(--status-success)] status-dot-pulse"}`} />
+                          <span className="text-body-sm text-foreground flex-1 truncate">{cron.name}</span>
+                          <span className="text-caption text-muted-foreground font-mono tabular-nums">{cron.cron_expr}</span>
+                          <Badge className={`text-[9px] border-0 ${cron.task_kind === "agent_turn" ? "bg-[var(--chart-4)]/10 text-[var(--chart-4)]" : "bg-[var(--status-info-bg)] text-[var(--status-info)]"}`}>
+                            {cron.task_kind}
+                          </Badge>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </section>
+              </div>
             )}
 
             {/* ---- Webhooks ---- */}
@@ -2526,92 +2506,88 @@ export default function AgentEditPage({ params }: { params: Promise<{ id: string
 
             {/* ---- Telegram ---- */}
             {tab === "telegram" && (
-              <>
-                <Card size="sm">
-                  <CardHeader className="border-b">
-                    <div className="flex items-center justify-between">
-                      <CardTitle className="text-xs">Bot Connection</CardTitle>
-                      <span className="text-[9px] text-muted-foreground">restart required</span>
-                    </div>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
+              <div className="space-y-8">
+                {/* ── BOT CONNECTION ── */}
+                <section className="space-y-4 pb-2 border-b border-border/40">
+                  <div className="flex items-baseline justify-between gap-2">
+                    <h3 className="text-title">Bot connection</h3>
+                    <span className="text-caption text-muted-foreground">restart required</span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-1.5">
-                      <label className={labelClass}>Bot Token (env var reference)</label>
+                      <label className={labelClass}>Bot token (env var)</label>
                       <input value={botToken} onChange={e => setBotToken(e.target.value)} className={`${inputClass} font-mono`} placeholder="${BOT_TOKEN}" />
                     </div>
                     <div className="space-y-1.5">
-                      <label className={labelClass}>Owner Telegram User ID</label>
+                      <label className={labelClass}>Owner Telegram user ID</label>
                       <input type="number" value={ownerId} onChange={e => setOwnerId(Number(e.target.value))} className={inputClass} />
                     </div>
-                    <div className="flex justify-end pt-2">
-                      <Button onClick={saveTelegramIdentity} disabled={saving} size="sm">{saving ? "Saving..." : "Save"}</Button>
-                    </div>
-                  </CardContent>
-                </Card>
+                  </div>
+                </section>
 
-                <Card size="sm">
-                  <CardHeader className="border-b">
-                    <div className="flex items-center justify-between">
-                      <CardTitle className="text-xs">Group Access</CardTitle>
-                      <Badge variant="outline" className="text-[9px] border-border">live</Badge>
-                    </div>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
+                {/* ── GROUP ACCESS ── */}
+                <section className="space-y-4 pb-2 border-b border-border/40">
+                  <div className="flex items-baseline justify-between gap-2">
+                    <h3 className="text-title">Group access</h3>
+                    <span className="text-caption text-muted-foreground">live</span>
+                  </div>
+                  <div className="space-y-3">
                     <div className="space-y-1.5">
-                      <label className={labelClass}>Allowed Groups (comma-separated)</label>
+                      <label className={labelClass}>Allowed groups <span className="text-muted-foreground/70 normal-case tracking-normal">— comma-separated</span></label>
                       <input value={allowedGroups} onChange={e => setAllowedGroups(e.target.value)} className={inputClass} placeholder="-100123456, -100789012" />
                     </div>
                     <div className="space-y-1.5">
-                      <label className={labelClass}>Admin Groups (comma-separated)</label>
+                      <label className={labelClass}>Admin groups <span className="text-muted-foreground/70 normal-case tracking-normal">— comma-separated</span></label>
                       <input value={adminGroups} onChange={e => setAdminGroups(e.target.value)} className={inputClass} placeholder="-100123456" />
                     </div>
-                    <div className="flex justify-end pt-2">
-                      <Button onClick={saveTelegramRuntime} disabled={saving} size="sm">{saving ? "Saving..." : "Save Groups"}</Button>
-                    </div>
-                  </CardContent>
-                </Card>
+                  </div>
+                </section>
 
-                {/* Discovered Groups */}
+                {/* ── DISCOVERED GROUPS ── */}
                 {settingsData?.["discovered_groups"] && (() => {
                   try {
                     const groups: Record<string, string> = JSON.parse(settingsData["discovered_groups"]);
                     const entries = Object.entries(groups);
                     if (entries.length === 0) return null;
                     return (
-                      <Card size="sm">
-                        <CardHeader className="border-b">
-                          <CardTitle className="text-xs">Discovered Groups</CardTitle>
-                        </CardHeader>
-                        <CardContent className="space-y-2">
-                          <p className="text-[10px] text-muted-foreground">Groups this bot has been added to. Copy the ID to add it to Allowed Groups above.</p>
+                      <section className="space-y-3 pb-2 border-b border-border/40">
+                        <h3 className="text-title">Discovered groups</h3>
+                        <p className="text-body-sm text-muted-foreground">
+                          Groups this bot has been added to. Copy the ID to whitelist it above.
+                        </p>
+                        <div className="divide-y divide-border/50 rounded-xl border border-border bg-card">
                           {entries.map(([gid, gname]) => (
-                            <div key={gid} className="flex items-center justify-between bg-background/50 border border-border/60 rounded-md px-3 py-2">
+                            <div key={gid} className="flex items-center justify-between px-4 py-2.5">
                               <div>
-                                <span className="text-xs">{gname}</span>
-                                <span className="text-[10px] text-muted-foreground ml-2 font-mono">{gid}</span>
+                                <span className="text-body-sm">{gname}</span>
+                                <span className="text-caption text-muted-foreground ml-2 font-mono">{gid}</span>
                               </div>
                               <Button
-                                size="sm" variant="ghost"
-                                className="h-5 text-[9px] px-1.5"
+                                variant="ghost"
                                 onClick={() => { navigator.clipboard.writeText(gid); toast.success("Copied"); }}
                               >
                                 Copy ID
                               </Button>
                             </div>
                           ))}
-                        </CardContent>
-                      </Card>
+                        </div>
+                      </section>
                     );
                   } catch { return null; }
                 })()}
 
-                {/* Privacy mode tip */}
-                <div className="rounded-md bg-muted/30 border border-border/50 p-3">
-                  <p className="text-[10px] text-muted-foreground leading-relaxed">
-                    For group chat features (auto-classification, multi-agent conversations), disable privacy mode via BotFather: <code className="font-mono text-[10px]">/setprivacy</code> → <code className="font-mono text-[10px]">Disable</code>. This allows the bot to see all group messages, not just @mentions.
-                  </p>
+                {/* Privacy mode tip — kept as a callout, not a card */}
+                <p className="text-body-sm text-muted-foreground leading-relaxed">
+                  For group features (auto-classification, multi-agent conversations), disable privacy mode via BotFather: <code className="font-mono">/setprivacy</code> → <code className="font-mono">Disable</code>. Lets the bot see all group messages, not just @mentions.
+                </p>
+
+                {/* Save anchor */}
+                <div className="flex items-center justify-end pt-3 border-t border-border/60">
+                  <Button onClick={async () => { await saveTelegramIdentity(); await saveTelegramRuntime(); }} disabled={saving}>
+                    {saving ? "Saving…" : "Save changes"}
+                  </Button>
                 </div>
-              </>
+              </div>
             )}
 
             {/* ---- Proactive Check-ins ---- */}
@@ -2621,21 +2597,19 @@ export default function AgentEditPage({ params }: { params: Promise<{ id: string
 
             {/* ---- Runtime Settings ---- */}
             {tab === "runtime" && (
-              <>
-                {!settingsData && <p className="text-[10px] text-muted-foreground">Loading settings...</p>}
+              <div className="space-y-8">
+                {!settingsData && <p className="text-body-sm text-muted-foreground">Loading settings…</p>}
                 {settingsData && (
                   <>
-                    {/* Memory Settings */}
-                    <Card size="sm">
-                      <CardHeader className="border-b">
-                        <div className="flex items-center gap-2">
-                          <CardTitle className="text-xs">Memory Settings</CardTitle>
-                          <Badge variant="outline" className="text-[9px] border-border">live</Badge>
-                        </div>
-                      </CardHeader>
-                      <CardContent className="space-y-3">
+                    {/* ── MEMORY ── */}
+                    <section className="space-y-4 pb-2 border-b border-border/40">
+                      <div className="flex items-baseline justify-between gap-2">
+                        <h3 className="text-title">Memory</h3>
+                        <span className="text-caption text-muted-foreground">live · saves on blur</span>
+                      </div>
+                      <div className="grid grid-cols-2 gap-4">
                         <div className="flex flex-col gap-1.5">
-                          <label className={labelClass}>Last Messages (context window)</label>
+                          <label className={labelClass}>Last messages</label>
                           <input
                             type="number"
                             defaultValue={settingsData["memory.lastMessages"] ?? ""}
@@ -2644,174 +2618,144 @@ export default function AgentEditPage({ params }: { params: Promise<{ id: string
                             className={numberInputClass}
                           />
                         </div>
-                        <label className="flex items-center gap-2 cursor-pointer">
+                      </div>
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={settingsData["memory.workingMemory.enabled"] === "true"}
+                          onChange={e => saveSetting("memory.workingMemory.enabled", e.target.checked)}
+                        />
+                        <span className="text-body-sm">Enable working memory</span>
+                      </label>
+                    </section>
+
+                    {/* ── BROWSER ── */}
+                    <section className="space-y-4 pb-2 border-b border-border/40">
+                      <div className="flex items-baseline justify-between gap-2">
+                        <h3 className="text-title">Browser</h3>
+                        <span className="text-caption text-muted-foreground">restart required</span>
+                      </div>
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={settingsData["browser.enabled"] === "true"}
+                          onChange={e => saveSetting("browser.enabled", e.target.checked)}
+                        />
+                        <span className="text-body-sm">Enable browser automation</span>
+                      </label>
+                      <p className="text-body-sm text-muted-foreground">
+                        Adds 16 browser tools for web navigation, form filling, and data extraction.
+                      </p>
+                      {settingsData["browser.enabled"] === "true" && (
+                        <div className="space-y-1.5">
+                          <label className={labelClass}>CDP URL <span className="text-muted-foreground/70 normal-case tracking-normal">— optional, connects to your own browser</span></label>
                           <input
-                            type="checkbox"
-                            checked={settingsData["memory.workingMemory.enabled"] === "true"}
-                            onChange={e => saveSetting("memory.workingMemory.enabled", e.target.checked)}
-                            className="rounded border-border bg-accent accent-teal-500"
+                            defaultValue={settingsData["browser.cdpUrl"] || ""}
+                            onBlur={e => {
+                              const v = e.target.value.trim();
+                              if (v && !/^https?:\/\/.+:\d+/.test(v)) {
+                                toast.error("CDP URL must be an HTTP address (e.g. http://localhost:9222)");
+                                return;
+                              }
+                              saveSetting("browser.cdpUrl", v);
+                            }}
+                            onKeyDown={e => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
+                            placeholder="http://localhost:9222 (leave blank for headless)"
+                            className={`${inputClass} font-mono`}
                           />
-                          <span className="text-[10px] text-muted-foreground">Working Memory</span>
-                        </label>
-                      </CardContent>
-                    </Card>
-
-                    <Separator />
-
-                    {/* Browser */}
-                    <Card size="sm">
-                      <CardHeader className="border-b">
-                        <div className="flex items-center gap-2">
-                          <CardTitle className="text-xs">Browser</CardTitle>
-                          <Badge variant="outline" className="text-[9px] border-border">restart</Badge>
+                          <p className="text-caption text-muted-foreground">
+                            Launch your browser with <code className="font-mono">--remote-debugging-port=9222</code> to share sessions / cookies with the agent.
+                          </p>
                         </div>
-                      </CardHeader>
-                      <CardContent className="space-y-2">
-                        <label className="flex items-center gap-2 cursor-pointer">
-                          <input
-                            type="checkbox"
-                            checked={settingsData["browser.enabled"] === "true"}
-                            onChange={e => saveSetting("browser.enabled", e.target.checked)}
-                            className="rounded border-border bg-accent accent-teal-500"
-                          />
-                          <span className="text-[10px] text-muted-foreground">Enable browser automation</span>
-                        </label>
-                        <p className="text-[10px] text-muted-foreground/60">
-                          Adds 16 browser tools for web navigation, form filling, and data extraction.
-                        </p>
-                        {settingsData["browser.enabled"] === "true" && (
-                          <div className="space-y-1.5 pt-1">
-                            <div className="flex items-center gap-1.5">
-                              <span className="text-[10px] text-muted-foreground font-medium">CDP URL</span>
-                              <span
-                                className="text-[9px] text-muted-foreground/50 cursor-help"
-                                title="Connect to your own browser instead of headless Chrome. Launch your browser with --remote-debugging-port=9222, then enter http://localhost:9222 here. The agent will use your existing sessions, cookies, and auth."
-                              >&#9432;</span>
-                            </div>
+                      )}
+                    </section>
+
+                    {/* ── VOICE (TTS) ── */}
+                    <section className="space-y-4 pb-2 border-b border-border/40">
+                      <div className="flex items-baseline justify-between gap-2">
+                        <h3 className="text-title">Voice <span className="text-body-sm font-normal text-muted-foreground">ElevenLabs</span></h3>
+                        <span className="text-caption text-muted-foreground">live</span>
+                      </div>
+                      <div className="space-y-1.5">
+                        <label className={labelClass}>Mode</label>
+                        <select
+                          value={settingsData["tts.mode"] || "off"}
+                          onChange={e => saveSetting("tts.mode", e.target.value)}
+                          className={inputClass}
+                        >
+                          <option value="off">off</option>
+                          <option value="inbound">inbound — reply to voice with voice</option>
+                          <option value="always">always</option>
+                          <option value="tagged">tagged — only on [[tts]] marker</option>
+                        </select>
+                      </div>
+                      {settingsData["tts.mode"] && settingsData["tts.mode"] !== "off" && (
+                        <div className="grid grid-cols-2 gap-4">
+                          <div className="space-y-1.5">
+                            <label className={labelClass}>Voice ID</label>
                             <input
-                              defaultValue={settingsData["browser.cdpUrl"] || ""}
-                              onBlur={e => {
-                                const v = e.target.value.trim();
-                                if (v && !/^https?:\/\/.+:\d+/.test(v)) {
-                                  toast.error("CDP URL must be an HTTP address (e.g. http://localhost:9222)");
-                                  return;
-                                }
-                                saveSetting("browser.cdpUrl", v);
-                              }}
+                              defaultValue={settingsData["tts.voiceId"] || ""}
+                              onBlur={e => saveSetting("tts.voiceId", e.target.value.trim())}
                               onKeyDown={e => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
-                              placeholder="http://localhost:9222 (leave blank for headless)"
-                              className="w-full bg-muted border border-border rounded-md px-2 py-1 font-mono text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                              placeholder="e.g. pMsXgVXv3BLzUgSXRplE"
+                              className={`${inputClass} font-mono`}
                             />
                           </div>
-                        )}
-                      </CardContent>
-                    </Card>
-
-                    <Separator />
-
-                    {/* Voice (TTS) */}
-                    <Card size="sm">
-                      <CardHeader className="border-b">
-                        <div className="flex items-center gap-2">
-                          <CardTitle className="text-xs">Voice (TTS)</CardTitle>
-                          <Badge variant="outline" className="text-[9px] border-border">ElevenLabs</Badge>
-                        </div>
-                      </CardHeader>
-                      <CardContent className="space-y-2">
-                        <div className="space-y-1.5">
-                          <div className="flex items-center gap-1.5">
-                            <span className="text-[10px] text-muted-foreground font-medium">Mode</span>
-                            <span
-                              className="text-[9px] text-muted-foreground/50 cursor-help"
-                              title="off: never speak. always: every reply as voice. inbound: only when user sent a voice note. tagged: only when the model emits [[tts]] in its reply."
-                            >&#9432;</span>
+                          <div className="space-y-1.5">
+                            <label className={labelClass}>Model</label>
+                            <input
+                              defaultValue={settingsData["tts.modelId"] || ""}
+                              onBlur={e => saveSetting("tts.modelId", e.target.value.trim())}
+                              onKeyDown={e => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
+                              placeholder="eleven_v3 (default)"
+                              className={`${inputClass} font-mono`}
+                            />
                           </div>
-                          <select
-                            value={settingsData["tts.mode"] || "off"}
-                            onChange={e => saveSetting("tts.mode", e.target.value)}
-                            className="w-full bg-muted border border-border rounded-md px-2 py-1 text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-                          >
-                            <option value="off">off</option>
-                            <option value="inbound">inbound (reply to voice with voice)</option>
-                            <option value="always">always</option>
-                            <option value="tagged">tagged ([[tts]] marker)</option>
-                          </select>
+                          <div className="space-y-1.5">
+                            <label className={labelClass}>Stability</label>
+                            <select
+                              value={settingsData["tts.stability"] || "natural"}
+                              onChange={e => saveSetting("tts.stability", e.target.value)}
+                              className={inputClass}
+                            >
+                              <option value="creative">creative</option>
+                              <option value="natural">natural</option>
+                              <option value="robust">robust</option>
+                            </select>
+                          </div>
+                          <div className="space-y-1.5">
+                            <div className="flex items-center justify-between">
+                              <label className={labelClass}>Speed</label>
+                              <span className="text-caption text-muted-foreground font-mono tabular-nums">
+                                {parseFloat(settingsData["tts.speed"] || "1.0").toFixed(2)}x
+                              </span>
+                            </div>
+                            <input
+                              type="range"
+                              min="0.7"
+                              max="1.2"
+                              step="0.05"
+                              value={settingsData["tts.speed"] || "1.0"}
+                              onChange={e => saveSetting("tts.speed", e.target.value)}
+                              className="w-full"
+                            />
+                          </div>
+                          <p className="text-caption text-muted-foreground col-span-2">
+                            Requires <code className="font-mono">ELEVENLABS_API_KEY</code>. v3 tags like <code className="font-mono">[laughs]</code>, <code className="font-mono">[whispers]</code>, <code className="font-mono">[pause 1s]</code> work inline. Speed works best on multilingual_v2.
+                          </p>
                         </div>
-                        {settingsData["tts.mode"] && settingsData["tts.mode"] !== "off" && (
-                          <>
-                            <div className="space-y-1.5 pt-1">
-                              <span className="text-[10px] text-muted-foreground font-medium">Voice ID</span>
-                              <input
-                                defaultValue={settingsData["tts.voiceId"] || ""}
-                                onBlur={e => saveSetting("tts.voiceId", e.target.value.trim())}
-                                onKeyDown={e => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
-                                placeholder="e.g. pMsXgVXv3BLzUgSXRplE"
-                                className="w-full bg-muted border border-border rounded-md px-2 py-1 font-mono text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-                              />
-                            </div>
-                            <div className="space-y-1.5 pt-1">
-                              <span className="text-[10px] text-muted-foreground font-medium">Model</span>
-                              <input
-                                defaultValue={settingsData["tts.modelId"] || ""}
-                                onBlur={e => saveSetting("tts.modelId", e.target.value.trim())}
-                                onKeyDown={e => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
-                                placeholder="eleven_v3 (default)"
-                                className="w-full bg-muted border border-border rounded-md px-2 py-1 font-mono text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-                              />
-                            </div>
-                            <div className="space-y-1.5 pt-1">
-                              <span className="text-[10px] text-muted-foreground font-medium">Stability</span>
-                              <select
-                                value={settingsData["tts.stability"] || "natural"}
-                                onChange={e => saveSetting("tts.stability", e.target.value)}
-                                className="w-full bg-muted border border-border rounded-md px-2 py-1 text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-                              >
-                                <option value="creative">creative</option>
-                                <option value="natural">natural</option>
-                                <option value="robust">robust</option>
-                              </select>
-                            </div>
-                            <div className="space-y-1.5 pt-1">
-                              <div className="flex items-center justify-between">
-                                <span className="text-[10px] text-muted-foreground font-medium">Speed</span>
-                                <span className="text-[10px] text-muted-foreground font-mono tabular-nums">
-                                  {parseFloat(settingsData["tts.speed"] || "1.0").toFixed(2)}x
-                                </span>
-                              </div>
-                              <input
-                                type="range"
-                                min="0.7"
-                                max="1.2"
-                                step="0.05"
-                                value={settingsData["tts.speed"] || "1.0"}
-                                onChange={e => saveSetting("tts.speed", e.target.value)}
-                                className="w-full accent-teal-500"
-                              />
-                              <p className="text-[10px] text-muted-foreground/50">
-                                Note: v3 favors tag/punctuation pacing. Speed works best on multilingual_v2.
-                              </p>
-                            </div>
-                            <p className="text-[10px] text-muted-foreground/60 pt-1">
-                              Requires <span className="font-mono">ELEVENLABS_API_KEY</span>. v3 tags like <span className="font-mono">[laughs]</span>, <span className="font-mono">[whispers]</span>, <span className="font-mono">[pause 1s]</span> work inline.
-                            </p>
-                          </>
-                        )}
-                      </CardContent>
-                    </Card>
+                      )}
+                    </section>
 
-                    <Separator />
-
-                    {/* Access Control */}
-                    <Card size="sm">
-                      <CardHeader className="border-b">
-                        <div className="flex items-center gap-2">
-                          <CardTitle className="text-xs">Access Control</CardTitle>
-                          <Badge variant="outline" className="text-[9px] border-border">live</Badge>
-                        </div>
-                      </CardHeader>
-                      <CardContent className="space-y-4">
+                    {/* ── ACCESS CONTROL ── */}
+                    <section className="space-y-4 pb-2 border-b border-border/40">
+                      <div className="flex items-baseline justify-between gap-2">
+                        <h3 className="text-title">Access control</h3>
+                        <span className="text-caption text-muted-foreground">live</span>
+                      </div>
+                      <div className="space-y-3">
                         <div className="space-y-1.5">
-                          <label className={labelClass}>Allowed Groups (comma-separated)</label>
+                          <label className={labelClass}>Allowed groups <span className="text-muted-foreground/70 normal-case tracking-normal">— comma-separated</span></label>
                           <input
                             defaultValue={settingsData["allowedGroups"] || ""}
                             onBlur={e => saveSetting("allowedGroups", e.target.value)}
@@ -2820,7 +2764,7 @@ export default function AgentEditPage({ params }: { params: Promise<{ id: string
                           />
                         </div>
                         <div className="space-y-1.5">
-                          <label className={labelClass}>Admin Groups (comma-separated)</label>
+                          <label className={labelClass}>Admin groups <span className="text-muted-foreground/70 normal-case tracking-normal">— comma-separated</span></label>
                           <input
                             defaultValue={settingsData["adminGroups"] || ""}
                             onBlur={e => saveSetting("adminGroups", e.target.value)}
@@ -2828,15 +2772,15 @@ export default function AgentEditPage({ params }: { params: Promise<{ id: string
                             placeholder="-100123456"
                           />
                         </div>
-                      </CardContent>
-                    </Card>
+                      </div>
+                    </section>
 
-                    <p className="text-[10px] text-muted-foreground">
-                      Runtime settings are stored in SQLite and take effect immediately -- no restart needed.
+                    <p className="text-caption text-muted-foreground">
+                      Runtime settings are stored in SQLite and take effect immediately on blur — no restart needed.
                     </p>
                   </>
                 )}
-              </>
+              </div>
             )}
 
           </div>
