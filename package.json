@@ -1,17 +1,23 @@
 {
   "name": "golem-agent",
-  "version": "0.1.5",
+  "version": "0.2.0",
   "description": "Workflow-first personal AI agent. Multi-platform messaging. Semantic memory. Autonomous operation.",
   "type": "module",
   "bin": {
     "golem": "./bin/golem.js"
   },
   "files": [
+    "dist/",
+    "bin/",
+    "skills/",
+    "ui/",
+    "!ui/.next/",
+    "!ui/node_modules/",
     "src/",
+    "!src/**/*.test.ts",
     "!src/__tests__/",
     "!src/**/__tests__/",
     "!src/test-harness.ts",
-    "bin/",
     "README.md",
     "LICENSE"
   ],
@@ -42,6 +48,8 @@
     "test": "bun test",
     "lint": "eslint src/",
     "typecheck": "tsc --noEmit",
+    "build": "rm -rf dist && tsc",
+    "prepublishOnly": "npm run typecheck && npm run test && npm run build",
     "prepare": "husky"
   },
   "dependencies": {
