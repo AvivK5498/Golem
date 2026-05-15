@@ -5,7 +5,7 @@
 <p align="center">🤖 Multi-agent &nbsp;•&nbsp; 💬 Telegram-native &nbsp;•&nbsp; 🧠 Working memory &nbsp;•&nbsp; 🔧 Skills & MCP &nbsp;•&nbsp; ⏰ Schedules & webhooks</p>
 
 <p align="center">
-  <a href="https://my.vultr.com/deploy/?plan=vc2-1c-1gb&region=fra&os=2284&script=__VULTR_SCRIPT_ID__&ref=__VULTR_AFFILIATE_REF__"><img src="https://img.shields.io/badge/deploy-on%20Vultr-007BFC?style=flat-square&logo=vultr&logoColor=white" alt="Deploy on Vultr"></a>
+  <a href="https://my.vultr.com/deploy/?plan=vc2-1c-1gb&region=fra&os=2284&script=7af88bb2-8947-43a7-b56a-33385eb13c39&ref=9776627"><img src="https://img.shields.io/badge/deploy-on%20Vultr-007BFC?style=flat-square&logo=vultr&logoColor=white" alt="Deploy on Vultr"></a>
   <a href="https://mastra.ai"><img src="https://img.shields.io/badge/built%20on-Mastra-7c3aed?style=flat-square" alt="Built on Mastra"></a>
   <a href="https://openrouter.ai"><img src="https://img.shields.io/badge/LLMs-OpenRouter-0ea5e9?style=flat-square" alt="OpenRouter"></a>
   <a href="#license"><img src="https://img.shields.io/badge/license-MIT-22c55e?style=flat-square" alt="MIT License"></a>
