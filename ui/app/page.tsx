@@ -73,8 +73,8 @@ function AgentCard({
 
   return (
     <Link href={`/agents/${agent.id}`}>
-      <Card className="hover:shadow-md transition-shadow cursor-pointer group h-full">
-        <CardContent className="p-4 flex flex-col gap-3 h-full">
+      <Card className="hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 cursor-pointer group h-full">
+        <CardContent className="p-5 flex flex-col gap-3 h-full">
           {/* Header — avatar + name + status */}
           <div className="flex items-start justify-between gap-2">
             <div className="flex items-center gap-2.5 min-w-0">
@@ -162,8 +162,11 @@ function AgentCard({
             <div className="flex items-center gap-1.5">
               <Coins size={11} className="shrink-0 text-[var(--text-tertiary)]" />
               {signals.tokensToday > 0 ? (
-                <span className="tabular-nums">
-                  {compactNumber(signals.tokensToday)} tokens today
+                <span>
+                  <span className="font-semibold text-foreground tabular-nums">
+                    {compactNumber(signals.tokensToday)}
+                  </span>{" "}
+                  tokens today
                 </span>
               ) : (
                 <span className="text-[var(--text-tertiary)]">no spend today</span>
@@ -291,20 +294,32 @@ export default function HomePage() {
 
   return (
     <div className="space-y-8">
-      {/* Page title */}
+      {/* Page title — display weight, with the count as a numeric anchor */}
       <div>
-        <h1 className="text-[28px] font-semibold tracking-tight">Home</h1>
-        <p className="text-sm text-muted-foreground mt-1">
-          {agents.length > 0
-            ? `${agents.filter((a) => a.connected && a.enabled).length} of ${agents.length} agents online`
-            : "Your fleet is empty"}
-        </p>
+        <h1 className="text-display">Home</h1>
+        {agents.length > 0 ? (
+          <p className="mt-2 flex items-baseline gap-2">
+            <span className="num-large text-foreground">
+              {agents.filter((a) => a.connected && a.enabled).length}
+            </span>
+            <span className="text-body text-muted-foreground">
+              of {agents.length} agents online
+            </span>
+            <span className="text-kicker text-muted-foreground/80 ml-1">
+              · all systems normal
+            </span>
+          </p>
+        ) : (
+          <p className="text-body text-muted-foreground mt-2">
+            Your fleet is empty
+          </p>
+        )}
       </div>
 
       {/* Agent cards — the primary entry point */}
       <div>
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-xl font-semibold">Agents</h2>
+          <h2 className="text-title">Agents</h2>
           <Link
             href="/agents"
             className="text-[13px] font-medium text-[var(--brand-text)] hover:underline inline-flex items-center gap-1"
@@ -347,7 +362,7 @@ export default function HomePage() {
       {/* Recent activity */}
       <div>
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-xl font-semibold">Recent Activity</h2>
+          <h2 className="text-title">Recent Activity</h2>
           <Link
             href="/feed"
             className="text-[13px] font-medium text-[var(--brand-text)] hover:underline inline-flex items-center gap-1"

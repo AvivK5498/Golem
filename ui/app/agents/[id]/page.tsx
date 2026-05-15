@@ -1768,10 +1768,10 @@ export default function AgentEditPage({ params }: { params: Promise<{ id: string
             {(name || id).charAt(0).toUpperCase()}
           </div>
           <div className="flex-1 min-w-0">
-            <h1 className="text-[22px] font-semibold tracking-tight leading-tight truncate">
+            <h1 className="text-display-sm leading-tight truncate">
               {name || id}
             </h1>
-            <p className="text-[11px] text-muted-foreground font-mono">{id}</p>
+            <p className="text-caption text-muted-foreground font-mono">{id}</p>
           </div>
         </div>
 

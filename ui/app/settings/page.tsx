@@ -172,7 +172,7 @@ export default function SettingsPage() {
   return (
     <div className="flex-1 overflow-y-auto">
       <div className="max-w-5xl mx-auto py-6 px-6">
-        <h1 className="text-[22px] font-semibold tracking-tight mb-6">Settings</h1>
+        <h1 className="text-display mb-6">Settings</h1>
 
         {/* Top tab strip — 4 user-task groups */}
         <div className="border-b border-border mb-4">
