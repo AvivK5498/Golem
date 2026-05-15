@@ -881,95 +881,104 @@ function SubAgentsEditor({ agentId, subAgentsData, models, availableTools, avail
   }
 
   return (
-    <>
-      <Card size="sm">
-        <CardHeader className="border-b">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <CardTitle className="text-xs">Sub-agents</CardTitle>
-              <span className="text-[10px] text-muted-foreground">({agentIds.length})</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="flex items-center gap-2">
-                <div className="relative">
-                  <input
-                    value={newId}
-                    onChange={e => { setNewId(e.target.value); setNewIdError(""); }}
-                    onKeyDown={e => e.key === "Enter" && addAgent()}
-                    placeholder="new-agent-id"
-                    className={`${inputClass} w-36 !py-1 !text-[11px] ${newIdError ? "!border-destructive" : ""}`}
-                  />
-                  {newIdError && <p className="absolute -bottom-4 left-0 text-[9px] text-destructive whitespace-nowrap">{newIdError}</p>}
-                </div>
-                <Button size="sm" variant="outline" onClick={addAgent} className="h-6 text-[10px] px-2">
-                  Add
-                </Button>
-              </div>
-            </div>
+    <div className="space-y-10">
+      {/* ── HEADER ── */}
+      <section className="space-y-5">
+        <div className="flex items-baseline justify-between gap-3">
+          <div>
+            <h3 className="text-title">
+              Sub-agents
+              <span className="ml-2 text-body-sm font-normal text-muted-foreground">
+                {agentIds.length} configured
+              </span>
+            </h3>
+            <p className="text-body-sm text-muted-foreground mt-1">
+              Smaller specialised agents this one delegates to. Hot-reloaded — no restart.
+            </p>
           </div>
-        </CardHeader>
-        <CardContent className="space-y-2">
-          {agentIds.length === 0 && (
-            <p className="text-[10px] text-muted-foreground py-2">No sub-agents. Add one above.</p>
-          )}
-          {agentIds.map(saId => {
-            const sa = agents[saId];
-            const isExpanded = expandedId === saId;
-            return (
-              <div key={saId} className="border border-border/60 rounded-md overflow-hidden">
-                {/* Header — always visible */}
-                <button
-                  onClick={() => setExpandedId(isExpanded ? null : saId)}
-                  className="w-full flex items-center justify-between p-3 hover:bg-muted/30 transition-colors text-left"
-                >
-                  <div className="flex items-center gap-2">
-                    <span className="text-[10px] text-muted-foreground">{isExpanded ? "▾" : "▸"}</span>
-                    <span className="text-xs font-medium">{saId}</span>
-                    {sa.model && (
-                      <Badge variant="outline" className="text-[9px] text-muted-foreground border-border font-mono truncate max-w-[200px]">
-                        {sa.model}
-                      </Badge>
-                    )}
-                  </div>
-                  <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
-                    <span>{sa.tools?.length || 0} tools</span>
-                    {sa.skills && sa.skills.length > 0 && <span>{sa.skills.length} skills</span>}
-                    <span>{sa.maxSteps || 10} steps</span>
-                  </div>
-                </button>
+          <div className="flex items-end gap-2">
+            <div className="flex flex-col gap-1">
+              <input
+                value={newId}
+                onChange={(e) => { setNewId(e.target.value); setNewIdError(""); }}
+                onKeyDown={(e) => e.key === "Enter" && addAgent()}
+                placeholder="new-agent-id"
+                className={`${inputClass} w-44 ${newIdError ? "!border-destructive" : ""}`}
+              />
+              {newIdError && <p className="text-[10px] text-destructive">{newIdError}</p>}
+            </div>
+            <Button variant="outline" onClick={addAgent}>Add</Button>
+          </div>
+        </div>
+      </section>
 
-                {/* Expanded editor */}
-                {isExpanded && (() => {
-                  const mcpServers = Object.keys(mcpTools || {});
-                  const regularTools = (availableTools || []).filter(t =>
-                    !mcpServers.some(s => t.startsWith(`${s}_`))
-                  );
-                  return (
-                  <div className="border-t border-border/60 p-3 space-y-4 bg-card/30">
+      {/* ── LIST ── */}
+      <section className="space-y-3">
+        {agentIds.length === 0 && (
+          <p className="text-body-sm text-muted-foreground py-6 text-center border border-dashed border-border rounded-xl">
+            No sub-agents yet. Add one above.
+          </p>
+        )}
+        {agentIds.map((saId) => {
+          const sa = agents[saId];
+          const isExpanded = expandedId === saId;
+          const mcpServers = Object.keys(mcpTools || {});
+          const regularTools = (availableTools || []).filter(
+            (t) => !mcpServers.some((s) => t.startsWith(`${s}_`))
+          );
+          return (
+            <div
+              key={saId}
+              className="rounded-xl border border-border bg-card overflow-hidden transition-shadow hover:shadow-[var(--shadow-clay)]"
+            >
+              {/* Row header — always visible */}
+              <button
+                type="button"
+                onClick={() => setExpandedId(isExpanded ? null : saId)}
+                className="w-full flex items-center justify-between p-4 text-left outline-none focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                <div className="flex items-center gap-3 min-w-0">
+                  <span className={`text-muted-foreground transition-transform ${isExpanded ? "rotate-90" : ""}`}>›</span>
+                  <span className="text-[13px] font-semibold truncate">{saId}</span>
+                  {sa.model && (
+                    <span className="text-[10px] text-muted-foreground font-mono truncate max-w-[280px]">
+                      {sa.model}
+                    </span>
+                  )}
+                </div>
+                <div className="flex items-center gap-3 text-caption text-muted-foreground shrink-0">
+                  <span>{sa.tools?.length || 0} tools</span>
+                  {sa.skills && sa.skills.length > 0 && <span>{sa.skills.length} skills</span>}
+                  <span>{sa.maxSteps || 10} steps</span>
+                </div>
+              </button>
+
+              {/* Expanded editor — flat sections, no inner card chrome */}
+              {isExpanded && (
+                <div className="border-t border-border/60 p-5 space-y-6">
+                  {/* Basics */}
+                  <div className="space-y-4">
                     <div className="space-y-1.5">
                       <label className={labelClass}>Description</label>
                       <input
                         value={sa.description || ""}
-                        onChange={e => updateAgent(saId, { description: e.target.value })}
+                        onChange={(e) => updateAgent(saId, { description: e.target.value })}
                         placeholder="What this sub-agent does"
                         className={inputClass}
                       />
                     </div>
-
                     <div className="grid grid-cols-2 gap-4">
+                      <ModelCombobox
+                        value={sa.model || ""}
+                        onChange={(v) => updateAgent(saId, { model: v })}
+                        models={models}
+                        label="Model"
+                      />
                       <div className="space-y-1.5">
-                        <ModelCombobox
-                          value={sa.model || ""}
-                          onChange={v => updateAgent(saId, { model: v })}
-                          models={models}
-                          label="Model"
-                        />
-                      </div>
-                      <div className="space-y-1.5">
-                        <label className={labelClass}>Reasoning Effort</label>
+                        <label className={labelClass}>Reasoning effort</label>
                         <select
                           value={sa.reasoningEffort || "medium"}
-                          onChange={e => updateAgent(saId, { reasoningEffort: e.target.value })}
+                          onChange={(e) => updateAgent(saId, { reasoningEffort: e.target.value })}
                           className={`${inputClass} h-[38px]`}
                         >
                           <option value="xhigh">xhigh</option>
@@ -980,15 +989,12 @@ function SubAgentsEditor({ agentId, subAgentsData, models, availableTools, avail
                           <option value="none">none</option>
                         </select>
                       </div>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-4">
                       <div className="space-y-1.5">
-                        <label className={labelClass}>Max Steps</label>
+                        <label className={labelClass}>Max steps</label>
                         <input
                           type="number"
                           value={sa.maxSteps ?? 10}
-                          onChange={e => updateAgent(saId, { maxSteps: Number(e.target.value) })}
+                          onChange={(e) => updateAgent(saId, { maxSteps: Number(e.target.value) })}
                           min={1} max={100}
                           className={inputClass}
                         />
@@ -998,143 +1004,160 @@ function SubAgentsEditor({ agentId, subAgentsData, models, availableTools, avail
                         <input
                           type="number"
                           value={sa.temperature ?? 0.2}
-                          onChange={e => updateAgent(saId, { temperature: Number(e.target.value) })}
+                          onChange={(e) => updateAgent(saId, { temperature: Number(e.target.value) })}
                           min={0} max={2} step={0.1}
                           className={inputClass}
                         />
                       </div>
                     </div>
+                  </div>
 
-                    {/* Workspace Access */}
-                    <div className="space-y-1.5">
-                      <label className={labelClass}>Workspace Access</label>
-                      <div className="flex items-center gap-4">
-                        <label className="flex items-center gap-1.5 cursor-pointer">
-                          <input
-                            type="checkbox"
-                            checked={(sa.tools || []).includes("workspace_read")}
-                            onChange={() => toggleTool(saId, "workspace_read")}
-                            className="rounded border-border bg-accent"
-                          />
-                          <span className="text-[10px] text-muted-foreground">Read</span>
-                        </label>
-                        <label className="flex items-center gap-1.5 cursor-pointer">
-                          <input
-                            type="checkbox"
-                            checked={(sa.tools || []).includes("workspace_write")}
-                            onChange={() => toggleTool(saId, "workspace_write")}
-                            className="rounded border-border bg-accent"
-                          />
-                          <span className="text-[10px] text-muted-foreground">Write</span>
-                        </label>
-                        {(sa.skills || []).length > 0 && !(sa.tools || []).includes("workspace_read") && (
-                          <span className="text-[9px] text-muted-foreground/60">Skills auto-grant read access</span>
-                        )}
-                      </div>
-                    </div>
-
-                    <div className="space-y-1.5">
-                      <label className={labelClass}>Instructions</label>
-                      <textarea
-                        value={sa.instructions || ""}
-                        onChange={e => updateAgent(saId, { instructions: e.target.value })}
-                        placeholder="System prompt for this sub-agent..."
-                        rows={4}
-                        className={`${inputClass} !text-[11px] resize-y font-mono`}
-                      />
-                    </div>
-
-                    {/* Regular Tools */}
-                    <div className="space-y-1.5">
-                      <label className={labelClass}>
-                        Tools ({(sa.tools || []).filter(t => !mcpServers.some(s => t.startsWith(`${s}_`))).length} selected)
+                  {/* Workspace access */}
+                  <div className="space-y-2">
+                    <h4 className={labelClass}>Workspace access</h4>
+                    <div className="flex items-center gap-5">
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={(sa.tools || []).includes("workspace_read")}
+                          onChange={() => toggleTool(saId, "workspace_read")}
+                        />
+                        <span className="text-body-sm">Read</span>
                       </label>
-                      <div className="bg-background/50 border border-border/60 rounded-md p-2 max-h-[160px] overflow-y-auto">
-                        <div className="grid grid-cols-2 md:grid-cols-3 gap-x-3 gap-y-0.5">
-                          {regularTools.map(tool => (
-                            <label key={tool} className="flex items-center gap-1.5 cursor-pointer py-0.5">
-                              <input type="checkbox" checked={(sa.tools || []).includes(tool)} onChange={() => toggleTool(saId, tool)}
-                                className="rounded border-border bg-accent accent-purple-500" />
-                              <span className="text-[9px] text-muted-foreground truncate">{tool}</span>
-                            </label>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* MCP Tools */}
-                    {mcpServers.length > 0 && (
-                      <div className="space-y-1.5">
-                        <label className={labelClass}>
-                          MCP Tools ({(sa.tools || []).filter(t => mcpServers.some(s => t.startsWith(`${s}_`))).length} selected)
-                        </label>
-                        <div className="space-y-2">
-                          {mcpServers.map(server => {
-                            const serverTools = mcpTools?.[server] || [];
-                            if (serverTools.length === 0) return null;
-                            const selectedCount = serverTools.filter(t => (sa.tools || []).includes(t)).length;
-                            return (
-                              <div key={server} className="bg-background/50 border border-border/60 rounded-md p-2">
-                                <p className="text-[9px] text-muted-foreground font-medium mb-1">{server} ({selectedCount}/{serverTools.length})</p>
-                                <div className="grid grid-cols-2 md:grid-cols-3 gap-x-3 gap-y-0.5">
-                                  {serverTools.map(tool => (
-                                    <label key={tool} className="flex items-center gap-1.5 cursor-pointer py-0.5">
-                                      <input type="checkbox" checked={(sa.tools || []).includes(tool)} onChange={() => toggleTool(saId, tool)}
-                                        className="rounded border-border bg-accent accent-[var(--brand)]" />
-                                      <span className="text-[9px] text-muted-foreground truncate">{tool.replace(`${server}_`, "")}</span>
-                                    </label>
-                                  ))}
-                                </div>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Skills */}
-                    <div className="space-y-1.5">
-                      <label className={labelClass}>Skills ({sa.skills?.length || 0} selected)</label>
-                      <div className="bg-background/50 border border-border/60 rounded-md p-2">
-                        <div className="grid grid-cols-2 md:grid-cols-3 gap-x-3 gap-y-0.5">
-                          {(availableSkills || []).map(skill => (
-                            <label key={skill.name} className="flex items-center gap-1.5 cursor-pointer py-0.5">
-                              <input type="checkbox" checked={(sa.skills || []).includes(skill.name)} onChange={() => toggleSkill(saId, skill.name)}
-                                className="rounded border-border bg-accent" />
-                              <span className="text-[9px] text-muted-foreground truncate">{skill.name}</span>
-                            </label>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="flex justify-end pt-1">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => deleteAgent(saId)}
-                        className="h-6 text-[10px] px-2 text-destructive hover:text-destructive"
-                      >
-                        Delete Sub-agent
-                      </Button>
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={(sa.tools || []).includes("workspace_write")}
+                          onChange={() => toggleTool(saId, "workspace_write")}
+                        />
+                        <span className="text-body-sm">Write</span>
+                      </label>
+                      {(sa.skills || []).length > 0 && !(sa.tools || []).includes("workspace_read") && (
+                        <span className="text-caption text-muted-foreground/70">
+                          Skills auto-grant read access
+                        </span>
+                      )}
                     </div>
                   </div>
-                  );
-                })()}
-              </div>
-            );
-          })}
-        </CardContent>
-      </Card>
 
-      {/* Save footer */}
-      <div className="sticky bottom-0 bg-background/80 backdrop-blur-sm border-t border-border -mx-6 px-6 py-3 flex items-center justify-between">
-        <p className="text-[10px] text-muted-foreground">Changes are hot-reloaded — no restart needed.</p>
-        <Button onClick={saveAll} disabled={saving} size="sm">
-          {saving ? "Saving..." : "Save"}
+                  {/* Instructions */}
+                  <div className="space-y-1.5">
+                    <label className={labelClass}>Instructions</label>
+                    <textarea
+                      value={sa.instructions || ""}
+                      onChange={(e) => updateAgent(saId, { instructions: e.target.value })}
+                      placeholder="System prompt for this sub-agent..."
+                      rows={4}
+                      className={`${inputClass} resize-y font-mono text-[12px]`}
+                    />
+                  </div>
+
+                  {/* Tools */}
+                  <div className="space-y-2">
+                    <h4 className={labelClass}>
+                      Tools
+                      <span className="ml-2 normal-case tracking-normal text-muted-foreground/80">
+                        ({(sa.tools || []).filter((t) => !mcpServers.some((s) => t.startsWith(`${s}_`))).length} selected)
+                      </span>
+                    </h4>
+                    <div className="max-h-[180px] overflow-y-auto grid grid-cols-2 md:grid-cols-3 gap-x-4 gap-y-1.5 pr-1">
+                      {regularTools.map((tool) => (
+                        <label key={tool} className="flex items-center gap-2 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={(sa.tools || []).includes(tool)}
+                            onChange={() => toggleTool(saId, tool)}
+                          />
+                          <span className="text-body-sm text-muted-foreground truncate">{tool}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* MCP Tools */}
+                  {mcpServers.length > 0 && (
+                    <div className="space-y-3">
+                      <h4 className={labelClass}>
+                        MCP tools
+                        <span className="ml-2 normal-case tracking-normal text-muted-foreground/80">
+                          ({(sa.tools || []).filter((t) => mcpServers.some((s) => t.startsWith(`${s}_`))).length} selected)
+                        </span>
+                      </h4>
+                      {mcpServers.map((server) => {
+                        const serverTools = mcpTools?.[server] || [];
+                        if (serverTools.length === 0) return null;
+                        const selectedCount = serverTools.filter((t) => (sa.tools || []).includes(t)).length;
+                        return (
+                          <div key={server} className="space-y-1.5">
+                            <p className="text-caption text-muted-foreground">
+                              {server} <span className="text-muted-foreground/70">· {selectedCount}/{serverTools.length}</span>
+                            </p>
+                            <div className="grid grid-cols-2 md:grid-cols-3 gap-x-4 gap-y-1.5">
+                              {serverTools.map((tool) => (
+                                <label key={tool} className="flex items-center gap-2 cursor-pointer">
+                                  <input
+                                    type="checkbox"
+                                    checked={(sa.tools || []).includes(tool)}
+                                    onChange={() => toggleTool(saId, tool)}
+                                  />
+                                  <span className="text-body-sm text-muted-foreground truncate">
+                                    {tool.replace(`${server}_`, "")}
+                                  </span>
+                                </label>
+                              ))}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  {/* Skills */}
+                  <div className="space-y-2">
+                    <h4 className={labelClass}>
+                      Skills
+                      <span className="ml-2 normal-case tracking-normal text-muted-foreground/80">
+                        ({sa.skills?.length || 0} selected)
+                      </span>
+                    </h4>
+                    <div className="grid grid-cols-2 md:grid-cols-3 gap-x-4 gap-y-1.5">
+                      {(availableSkills || []).map((skill) => (
+                        <label key={skill.name} className="flex items-center gap-2 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={(sa.skills || []).includes(skill.name)}
+                            onChange={() => toggleSkill(saId, skill.name)}
+                          />
+                          <span className="text-body-sm text-muted-foreground truncate">{skill.name}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Row-level delete */}
+                  <div className="flex justify-end pt-2 border-t border-border/40">
+                    <Button
+                      variant="ghost"
+                      onClick={() => deleteAgent(saId)}
+                      className="text-destructive hover:text-destructive hover:bg-destructive/5"
+                    >
+                      Delete sub-agent
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </section>
+
+      {/* Single Save anchor */}
+      <div className="flex justify-end pt-2 border-t border-border/60">
+        <Button onClick={saveAll} disabled={saving}>
+          {saving ? "Saving…" : "Save changes"}
         </Button>
       </div>
-    </>
+    </div>
   );
 }
 
@@ -1830,114 +1853,113 @@ export default function AgentEditPage({ params }: { params: Promise<{ id: string
 
             {/* ---- Identity ---- */}
             {tab === "identity" && (
-              <>
-                <Card size="sm">
-                  <CardHeader className="border-b">
-                    <CardTitle className="text-xs">Agent Identity</CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="space-y-1.5">
-                        <label className={labelClass}>Name</label>
-                        <input value={name} onChange={e => setName(e.target.value)} className={inputClass} />
-                      </div>
-                      <div className="space-y-1.5">
-                        <label className={labelClass}>Character Name (optional -- used in prompt opening)</label>
-                        <input value={characterName} onChange={e => setCharacterName(e.target.value)} className={inputClass} placeholder={name} />
-                      </div>
-                    </div>
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="space-y-1.5">
-                        <label className={labelClass}>Owner Name</label>
-                        <input value={ownerName} onChange={e => setOwnerName(e.target.value)} className={inputClass} placeholder="Owner" />
-                      </div>
-                      <div className="space-y-1.5">
-                        <label className={labelClass}>Role (used in prompt: &quot;{ownerName || "the user"}&apos;s {role || "personal assistant"}&quot;)</label>
-                        <input value={role} onChange={e => setRole(e.target.value)} className={inputClass} placeholder="personal assistant" />
-                      </div>
+              <div className="space-y-10">
+                {/* ── IDENTITY ── */}
+                <section className="space-y-5">
+                  <div className="flex items-baseline justify-between gap-2">
+                    <h3 className="text-title">Identity</h3>
+                    <span className="text-caption text-muted-foreground">restart required</span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-5">
+                    <div className="space-y-1.5">
+                      <label className={labelClass}>Name</label>
+                      <input value={name} onChange={e => setName(e.target.value)} className={inputClass} />
                     </div>
                     <div className="space-y-1.5">
-                      <label className={labelClass}>Description</label>
-                      <AutoTextarea value={description} onChange={e => setDescription(e.target.value)} minRows={2} maxHeight={200} />
+                      <label className={labelClass}>Character name <span className="text-muted-foreground/70 normal-case tracking-normal">— used in prompt opening, optional</span></label>
+                      <input value={characterName} onChange={e => setCharacterName(e.target.value)} className={inputClass} placeholder={name} />
                     </div>
-                  </CardContent>
-                </Card>
+                    <div className="space-y-1.5">
+                      <label className={labelClass}>Owner</label>
+                      <input value={ownerName} onChange={e => setOwnerName(e.target.value)} className={inputClass} placeholder="Owner" />
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className={labelClass}>Role</label>
+                      <input value={role} onChange={e => setRole(e.target.value)} className={inputClass} placeholder="personal assistant" />
+                      <p className="text-caption text-muted-foreground/80 mt-1">
+                        Prompt reads: <span className="text-foreground font-mono">{ownerName || "the user"}&rsquo;s {role || "personal assistant"}</span>
+                      </p>
+                    </div>
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className={labelClass}>Description</label>
+                    <AutoTextarea value={description} onChange={e => setDescription(e.target.value)} minRows={2} maxHeight={200} />
+                  </div>
+                  <div className="flex justify-end">
+                    <Button onClick={saveIdentity} disabled={saving}>
+                      {saving ? "Saving…" : "Save identity"}
+                    </Button>
+                  </div>
+                </section>
 
-                <Card size="sm">
-                  <CardHeader className="border-b">
-                    <CardTitle className="text-xs">Response Style</CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="space-y-1.5">
-                        <label className={labelClass}>Response Length</label>
-                        <select value={behaviorResponseLength} onChange={e => setBehaviorResponseLength(e.target.value)} className={inputClass}>
-                          <option value="brief">Brief</option>
-                          <option value="balanced">Balanced</option>
-                          <option value="detailed">Detailed</option>
-                        </select>
-                      </div>
-                      <div className="space-y-1.5">
-                        <label className={labelClass}>Agency</label>
-                        <select value={behaviorAgency} onChange={e => setBehaviorAgency(e.target.value)} className={inputClass}>
-                          <option value="execute_first">Execute first</option>
-                          <option value="ask_before_acting">Ask before acting</option>
-                          <option value="consultative">Consultative</option>
-                        </select>
-                      </div>
-                    </div>
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="space-y-1.5">
-                        <label className={labelClass}>Tone</label>
-                        <select value={behaviorTone} onChange={e => setBehaviorTone(e.target.value)} className={inputClass}>
-                          <option value="casual">Casual</option>
-                          <option value="balanced">Balanced</option>
-                          <option value="professional">Professional</option>
-                        </select>
-                      </div>
-                      <div className="space-y-1.5">
-                        <label className={labelClass}>Format</label>
-                        <select value={behaviorFormat} onChange={e => setBehaviorFormat(e.target.value)} className={inputClass}>
-                          <option value="texting">Texting</option>
-                          <option value="conversational">Conversational</option>
-                          <option value="structured">Structured</option>
-                        </select>
-                      </div>
-                    </div>
+                {/* ── VOICE ── */}
+                <section className="space-y-5">
+                  <h3 className="text-title">Voice</h3>
+                  <div className="grid grid-cols-2 gap-5">
                     <div className="space-y-1.5">
-                      <label className={labelClass}>Language</label>
-                      <select value={behaviorLanguage} onChange={e => setBehaviorLanguage(e.target.value)} className={inputClass}>
-                        <option value="english">English</option>
-                        <option value="hebrew">Hebrew</option>
-                        <option value="auto_detect">Auto-detect</option>
+                      <label className={labelClass}>Response length</label>
+                      <select value={behaviorResponseLength} onChange={e => setBehaviorResponseLength(e.target.value)} className={inputClass}>
+                        <option value="brief">Brief</option>
+                        <option value="balanced">Balanced</option>
+                        <option value="detailed">Detailed</option>
                       </select>
                     </div>
                     <div className="space-y-1.5">
-                      <label className={labelClass}>Custom Instructions</label>
-                      <AutoTextarea
-                        value={behaviorCustomInstructions}
-                        onChange={e => setBehaviorCustomInstructions(e.target.value)}
-                        minRows={2}
-                        maxHeight={200}
-                        placeholder="e.g. Always include calorie counts when discussing meals"
-                      />
+                      <label className={labelClass}>Agency</label>
+                      <select value={behaviorAgency} onChange={e => setBehaviorAgency(e.target.value)} className={inputClass}>
+                        <option value="execute_first">Execute first</option>
+                        <option value="ask_before_acting">Ask before acting</option>
+                        <option value="consultative">Consultative</option>
+                      </select>
                     </div>
-                    <div className="flex justify-end">
-                      <Button onClick={saveBehavior} disabled={savingBehavior} size="sm">
-                        {savingBehavior ? "Saving..." : "Save Behavior"}
-                      </Button>
+                    <div className="space-y-1.5">
+                      <label className={labelClass}>Tone</label>
+                      <select value={behaviorTone} onChange={e => setBehaviorTone(e.target.value)} className={inputClass}>
+                        <option value="casual">Casual</option>
+                        <option value="balanced">Balanced</option>
+                        <option value="professional">Professional</option>
+                      </select>
                     </div>
-                  </CardContent>
-                </Card>
+                    <div className="space-y-1.5">
+                      <label className={labelClass}>Format</label>
+                      <select value={behaviorFormat} onChange={e => setBehaviorFormat(e.target.value)} className={inputClass}>
+                        <option value="texting">Texting</option>
+                        <option value="conversational">Conversational</option>
+                        <option value="structured">Structured</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className={labelClass}>Language</label>
+                    <select value={behaviorLanguage} onChange={e => setBehaviorLanguage(e.target.value)} className={inputClass}>
+                      <option value="english">English</option>
+                      <option value="hebrew">Hebrew</option>
+                      <option value="auto_detect">Auto-detect</option>
+                    </select>
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className={labelClass}>Custom instructions</label>
+                    <AutoTextarea
+                      value={behaviorCustomInstructions}
+                      onChange={e => setBehaviorCustomInstructions(e.target.value)}
+                      minRows={2}
+                      maxHeight={200}
+                      placeholder="e.g. Always include calorie counts when discussing meals"
+                    />
+                  </div>
+                  <div className="flex justify-end">
+                    <Button onClick={saveBehavior} disabled={savingBehavior}>
+                      {savingBehavior ? "Saving…" : "Save voice"}
+                    </Button>
+                  </div>
+                </section>
 
-                <PromptSections agentId={id} persona={persona} onPersonaChange={setPersona} onSavePersona={() => saveMarkdown("persona", persona)} subAgents={subAgentEntries} identity={{ name, characterName, ownerName, role }} />
-
-                {/* Sticky save footer */}
-                <div className="sticky bottom-0 z-20 mt-6 flex items-center justify-between border-t border-border/60 bg-background/80 px-0 py-3 backdrop-blur">
-                  <span className="text-xs text-muted-foreground">Identity changes require restart</span>
-                  <Button onClick={saveIdentity} disabled={saving} size="sm">{saving ? "Saving..." : "Save Identity"}</Button>
-                </div>
-              </>
+                {/* ── PROMPT PREVIEW (kept as collapsible accordion) ── */}
+                <section className="space-y-5">
+                  <h3 className="text-title">Prompt</h3>
+                  <PromptSections agentId={id} persona={persona} onPersonaChange={setPersona} onSavePersona={() => saveMarkdown("persona", persona)} subAgents={subAgentEntries} identity={{ name, characterName, ownerName, role }} />
+                </section>
+              </div>
             )}
 
             {/* ---- Model ---- */}
