@@ -2,7 +2,12 @@
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 
-@custom-variant dark (&:is(.dark *));
+/*
+  Tailwind `dark:` utilities fire under the legacy `.dark` class OR under
+  any data-theme attribute whose palette is dark. Keep the list in sync
+  with the dark presets below (currently: espresso).
+*/
+@custom-variant dark (&:is(.dark *, [data-theme="espresso"] *));
 
 @theme inline {
   /* ── Fonts ─────────────────────────────────────────── */
@@ -57,114 +62,11 @@
 }
 
 /* ════════════════════════════════════════════════════════
-   LIGHT THEME (default)
-   Mastra-inspired: clean white, green accent, 3-layer depth
+   STATUS PALETTE — constant across every theme.
+   Status colors are not themed; success/warn/error/info must
+   read as themselves regardless of brand accent.
    ════════════════════════════════════════════════════════ */
 :root {
-  --radius: 8px;
-
-  /* Backgrounds — 3-layer depth system */
-  --background: #FAFAFA;
-  --card: #FFFFFF;
-  --popover: #FFFFFF;
-  --muted: #F4F4F5;            /* inset areas, code blocks */
-
-  /* Brand accent — green signature */
-  --primary: #18FB6F;
-  --primary-foreground: #052E16; /* dark green text on green bg */
-
-  /* Neutral actions */
-  --secondary: #F4F4F5;
-  --secondary-foreground: #141414;
-
-  /* Subtle backgrounds */
-  --accent: #F4F4F5;
-  --accent-foreground: #141414;
-
-  /* Text hierarchy */
-  --foreground: #2A2A2E;        /* primary text — softer charcoal, easier on the eye than pure black */
-  --card-foreground: #2A2A2E;
-  --popover-foreground: #2A2A2E;
-  --muted-foreground: #6B6B70;  /* secondary text — body, descriptions */
-
-  /* Semantic status */
-  --destructive: #DC2626;
-
-  /* Borders */
-  --border: #E4E4E7;
-  --input: #E4E4E7;
-  --ring: #18FB6F;              /* focus ring — green signature */
-
-  /* Chart palette — green-anchored */
-  --chart-1: #18FB6F;
-  --chart-2: #02792F;
-  --chart-3: #2563EB;
-  --chart-4: #8B5CF6;
-  --chart-5: #F59E0B;
-
-  /* Sidebar */
-  --sidebar: #FFFFFF;
-  --sidebar-foreground: #5F5F5F;
-  --sidebar-primary: #18FB6F;
-  --sidebar-primary-foreground: #052E16;
-  --sidebar-accent: #F0FDF4;    /* green tint for active nav */
-  --sidebar-accent-foreground: #02792F;
-  --sidebar-border: #F4F4F5;
-  --sidebar-ring: #18FB6F;
-}
-
-/* ════════════════════════════════════════════════════════
-   DARK THEME
-   Off-black backgrounds, green accent pops harder
-   ════════════════════════════════════════════════════════ */
-.dark {
-  --background: #111113;
-  --card: #1A1A1C;
-  --popover: #1A1A1C;
-  --muted: #222224;
-
-  --primary: #18FB6F;
-  --primary-foreground: #052E16;
-
-  --secondary: #222224;
-  --secondary-foreground: #F5F5F7;
-
-  --accent: #222224;
-  --accent-foreground: #F5F5F7;
-
-  --foreground: #F5F5F7;        /* off-white, not pure #FFF */
-  --card-foreground: #F5F5F7;
-  --popover-foreground: #F5F5F7;
-  --muted-foreground: rgba(245, 245, 247, 0.5);
-
-  --destructive: #F87171;
-
-  --border: rgba(255, 255, 255, 0.08);
-  --input: rgba(255, 255, 255, 0.12);
-  --ring: #18FB6F;
-
-  --chart-1: #18FB6F;
-  --chart-2: #4ADE80;
-  --chart-3: #60A5FA;
-  --chart-4: #A78BFA;
-  --chart-5: #FACC15;
-
-  --sidebar: #1A1A1C;
-  --sidebar-foreground: rgba(245, 245, 247, 0.5);
-  --sidebar-primary: #18FB6F;
-  --sidebar-primary-foreground: #052E16;
-  --sidebar-accent: rgba(24, 251, 111, 0.08);
-  --sidebar-accent-foreground: #4ADE80;
-  --sidebar-border: rgba(255, 255, 255, 0.06);
-  --sidebar-ring: #18FB6F;
-}
-
-/* ════════════════════════════════════════════════════════
-   CUSTOM DESIGN TOKENS (non-shadcn)
-   Referenced directly in components via var()
-   ════════════════════════════════════════════════════════ */
-:root {
-  /* Status colors */
   --status-success: #16A34A;
   --status-success-bg: #F0FDF4;
   --status-warning: #CA8A04;
@@ -173,29 +75,269 @@
   --status-error-bg: #FEF2F2;
   --status-info: #2563EB;
   --status-info-bg: #EFF6FF;
-
-  /* Brand shades */
-  --brand: #18FB6F;
-  --brand-hover: #10E85F;
-  --brand-muted: #DCFCE7;
-  --brand-text: #02792F;
-
-  /* Hover/interaction */
-  --bg-hover: #F0F0F1;
-  --border-subtle: #F4F4F5;
-
-  /* Shadows */
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.04);
-  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.06);
-  --shadow-lg: 0 8px 30px rgba(0, 0, 0, 0.10);
-
-  /* Text levels (direct access) */
-  --text-primary: #141414;
-  --text-secondary: #5F5F5F;
-  --text-tertiary: #A1A1AA;
 }
 
-.dark {
+/* ════════════════════════════════════════════════════════
+   CLAY — default theme. Warm cream + terracotta.
+   Handcrafted / organic / opinionated.
+   ════════════════════════════════════════════════════════ */
+:root,
+[data-theme="clay"] {
+  --radius: 8px;
+
+  --background: #FAF7F2;
+  --card: #FFFCF7;
+  --popover: #FFFCF7;
+  --muted: #F2EDE5;
+
+  --primary: #C2410C;
+  --primary-foreground: #FFF7F0;
+
+  --secondary: #F2EDE5;
+  --secondary-foreground: #1F1A14;
+
+  --accent: #F2EDE5;
+  --accent-foreground: #1F1A14;
+
+  --foreground: #1F1A14;
+  --card-foreground: #1F1A14;
+  --popover-foreground: #1F1A14;
+  --muted-foreground: #6B5F4F;
+
+  --destructive: #B91C1C;
+
+  --border: #E8DECF;
+  --input: #E8DECF;
+  --ring: #C2410C;
+
+  --chart-1: #C2410C;
+  --chart-2: #4D7C5C;
+  --chart-3: #312E81;
+  --chart-4: #8B5CF6;
+  --chart-5: #CA8A04;
+
+  --sidebar: #FFFCF7;
+  --sidebar-foreground: #6B5F4F;
+  --sidebar-primary: #C2410C;
+  --sidebar-primary-foreground: #FFF7F0;
+  --sidebar-accent: #F8EDE3;
+  --sidebar-accent-foreground: #9A3412;
+  --sidebar-border: #F0E9DD;
+  --sidebar-ring: #C2410C;
+
+  --brand: #C2410C;
+  --brand-hover: #9A3412;
+  --brand-muted: #F8EDE3;
+  --brand-text: #9A3412;
+
+  --bg-hover: #F2EDE5;
+  --border-subtle: #F0E9DD;
+
+  --shadow-sm: 0 1px 2px rgba(60, 40, 20, 0.04);
+  --shadow-md: 0 4px 12px rgba(60, 40, 20, 0.06);
+  --shadow-lg: 0 8px 30px rgba(60, 40, 20, 0.10);
+
+  --text-primary: #1F1A14;
+  --text-secondary: #6B5F4F;
+  --text-tertiary: #A89C8A;
+}
+
+/* ════════════════════════════════════════════════════════
+   INDIGO — craft-software aesthetic.
+   ════════════════════════════════════════════════════════ */
+[data-theme="indigo"] {
+  --radius: 8px;
+
+  --background: #FAFAF7;
+  --card: #FFFFFF;
+  --popover: #FFFFFF;
+  --muted: #F0F0F4;
+
+  --primary: #312E81;
+  --primary-foreground: #F5F5FA;
+
+  --secondary: #F0F0F4;
+  --secondary-foreground: #1A1A2E;
+
+  --accent: #F0F0F4;
+  --accent-foreground: #1A1A2E;
+
+  --foreground: #1A1A2E;
+  --card-foreground: #1A1A2E;
+  --popover-foreground: #1A1A2E;
+  --muted-foreground: #5C5C70;
+
+  --destructive: #DC2626;
+
+  --border: #E0E0E8;
+  --input: #E0E0E8;
+  --ring: #312E81;
+
+  --chart-1: #312E81;
+  --chart-2: #0EA5E9;
+  --chart-3: #C2410C;
+  --chart-4: #8B5CF6;
+  --chart-5: #F59E0B;
+
+  --sidebar: #FFFFFF;
+  --sidebar-foreground: #5C5C70;
+  --sidebar-primary: #312E81;
+  --sidebar-primary-foreground: #F5F5FA;
+  --sidebar-accent: #EEEEF5;
+  --sidebar-accent-foreground: #312E81;
+  --sidebar-border: #ECECF2;
+  --sidebar-ring: #312E81;
+
+  --brand: #312E81;
+  --brand-hover: #1E1B5C;
+  --brand-muted: #EEEEF5;
+  --brand-text: #312E81;
+
+  --bg-hover: #F0F0F4;
+  --border-subtle: #ECECF2;
+
+  --shadow-sm: 0 1px 2px rgba(20, 20, 40, 0.04);
+  --shadow-md: 0 4px 12px rgba(20, 20, 40, 0.06);
+  --shadow-lg: 0 8px 30px rgba(20, 20, 40, 0.10);
+
+  --text-primary: #1A1A2E;
+  --text-secondary: #5C5C70;
+  --text-tertiary: #9090A0;
+}
+
+/* ════════════════════════════════════════════════════════
+   SAGE — muted forest, green-family lineage.
+   Status-success bumps brighter so it stays distinct.
+   ════════════════════════════════════════════════════════ */
+[data-theme="sage"] {
+  --radius: 8px;
+
+  --background: #F7F8F5;
+  --card: #FFFFFF;
+  --popover: #FFFFFF;
+  --muted: #ECEEE7;
+
+  --primary: #4D7C5C;
+  --primary-foreground: #F5F8F6;
+
+  --secondary: #ECEEE7;
+  --secondary-foreground: #1A1F1A;
+
+  --accent: #ECEEE7;
+  --accent-foreground: #1A1F1A;
+
+  --foreground: #1A1F1A;
+  --card-foreground: #1A1F1A;
+  --popover-foreground: #1A1F1A;
+  --muted-foreground: #5C685C;
+
+  --destructive: #DC2626;
+
+  --border: #DFE3D8;
+  --input: #DFE3D8;
+  --ring: #4D7C5C;
+
+  --chart-1: #4D7C5C;
+  --chart-2: #C2410C;
+  --chart-3: #312E81;
+  --chart-4: #CA8A04;
+  --chart-5: #8B5CF6;
+
+  --sidebar: #FFFFFF;
+  --sidebar-foreground: #5C685C;
+  --sidebar-primary: #4D7C5C;
+  --sidebar-primary-foreground: #F5F8F6;
+  --sidebar-accent: #ECF1EC;
+  --sidebar-accent-foreground: #2F5238;
+  --sidebar-border: #E5E8DF;
+  --sidebar-ring: #4D7C5C;
+
+  --brand: #4D7C5C;
+  --brand-hover: #2F5238;
+  --brand-muted: #ECF1EC;
+  --brand-text: #2F5238;
+
+  --bg-hover: #ECEEE7;
+  --border-subtle: #E5E8DF;
+
+  --shadow-sm: 0 1px 2px rgba(30, 50, 30, 0.04);
+  --shadow-md: 0 4px 12px rgba(30, 50, 30, 0.06);
+  --shadow-lg: 0 8px 30px rgba(30, 50, 30, 0.10);
+
+  --text-primary: #1A1F1A;
+  --text-secondary: #5C685C;
+  --text-tertiary: #909990;
+}
+
+/* Sage needs a brighter success to stay visible against its sage primary. */
+[data-theme="sage"] {
+  --status-success: #22C55E;
+}
+
+/* ════════════════════════════════════════════════════════
+   ESPRESSO — warm dark mode. Charcoal + amber.
+   Triggers Tailwind's `dark:` variant via the @custom-variant rule above.
+   ════════════════════════════════════════════════════════ */
+[data-theme="espresso"] {
+  --radius: 8px;
+
+  --background: #1A1714;
+  --card: #221E1A;
+  --popover: #221E1A;
+  --muted: #2A2520;
+
+  --primary: #E8853A;
+  --primary-foreground: #1A1714;
+
+  --secondary: #2A2520;
+  --secondary-foreground: #F5EFE4;
+
+  --accent: #2A2520;
+  --accent-foreground: #F5EFE4;
+
+  --foreground: #F5EFE4;
+  --card-foreground: #F5EFE4;
+  --popover-foreground: #F5EFE4;
+  --muted-foreground: rgba(245, 239, 228, 0.55);
+
+  --destructive: #F87171;
+
+  --border: rgba(245, 239, 228, 0.08);
+  --input: rgba(245, 239, 228, 0.12);
+  --ring: #E8853A;
+
+  --chart-1: #E8853A;
+  --chart-2: #84CC16;
+  --chart-3: #60A5FA;
+  --chart-4: #A78BFA;
+  --chart-5: #FACC15;
+
+  --sidebar: #221E1A;
+  --sidebar-foreground: rgba(245, 239, 228, 0.55);
+  --sidebar-primary: #E8853A;
+  --sidebar-primary-foreground: #1A1714;
+  --sidebar-accent: rgba(232, 133, 58, 0.12);
+  --sidebar-accent-foreground: #F4B97A;
+  --sidebar-border: rgba(245, 239, 228, 0.06);
+  --sidebar-ring: #E8853A;
+
+  --brand: #E8853A;
+  --brand-hover: #F4B97A;
+  --brand-muted: rgba(232, 133, 58, 0.12);
+  --brand-text: #F4B97A;
+
+  --bg-hover: #2A2520;
+  --border-subtle: rgba(245, 239, 228, 0.04);
+
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.4);
+  --shadow-lg: 0 8px 30px rgba(0, 0, 0, 0.5);
+
+  --text-primary: #F5EFE4;
+  --text-secondary: rgba(245, 239, 228, 0.65);
+  --text-tertiary: rgba(245, 239, 228, 0.35);
+
+  /* Status pops harder on dark */
   --status-success: #4ADE80;
   --status-success-bg: rgba(74, 222, 128, 0.1);
   --status-warning: #FACC15;
@@ -204,22 +346,69 @@
   --status-error-bg: rgba(248, 113, 113, 0.1);
   --status-info: #60A5FA;
   --status-info-bg: rgba(96, 165, 250, 0.1);
+}
 
-  --brand: #18FB6F;
-  --brand-hover: #2CFF7E;
-  --brand-muted: rgba(24, 251, 111, 0.1);
-  --brand-text: #4ADE80;
+/* ════════════════════════════════════════════════════════
+   MONO — neutral light. Monochrome, no warmth.
+   ════════════════════════════════════════════════════════ */
+[data-theme="mono"] {
+  --radius: 8px;
 
-  --bg-hover: #222224;
-  --border-subtle: rgba(255, 255, 255, 0.04);
+  --background: #FAFAFA;
+  --card: #FFFFFF;
+  --popover: #FFFFFF;
+  --muted: #F4F4F5;
 
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.2);
-  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.3);
-  --shadow-lg: 0 8px 30px rgba(0, 0, 0, 0.4);
+  --primary: #141414;
+  --primary-foreground: #FFFFFF;
 
-  --text-primary: #F5F5F7;
-  --text-secondary: rgba(245, 245, 247, 0.6);
-  --text-tertiary: rgba(245, 245, 247, 0.3);
+  --secondary: #F4F4F5;
+  --secondary-foreground: #141414;
+
+  --accent: #F4F4F5;
+  --accent-foreground: #141414;
+
+  --foreground: #141414;
+  --card-foreground: #141414;
+  --popover-foreground: #141414;
+  --muted-foreground: #6B6B70;
+
+  --destructive: #DC2626;
+
+  --border: #E4E4E7;
+  --input: #E4E4E7;
+  --ring: #141414;
+
+  --chart-1: #141414;
+  --chart-2: #6B6B70;
+  --chart-3: #A1A1AA;
+  --chart-4: #D4D4D8;
+  --chart-5: #E4E4E7;
+
+  --sidebar: #FFFFFF;
+  --sidebar-foreground: #5F5F5F;
+  --sidebar-primary: #141414;
+  --sidebar-primary-foreground: #FFFFFF;
+  --sidebar-accent: #F0F0F1;
+  --sidebar-accent-foreground: #141414;
+  --sidebar-border: #F4F4F5;
+  --sidebar-ring: #141414;
+
+  --brand: #141414;
+  --brand-hover: #000000;
+  --brand-muted: #F0F0F1;
+  --brand-text: #141414;
+
+  --bg-hover: #F0F0F1;
+  --border-subtle: #F4F4F5;
+
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.04);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.06);
+  --shadow-lg: 0 8px 30px rgba(0, 0, 0, 0.10);
+
+  --text-primary: #141414;
+  --text-secondary: #5F5F5F;
+  --text-tertiary: #A1A1AA;
 }
 
 /* ════════════════════════════════════════════════════════

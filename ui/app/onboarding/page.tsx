@@ -24,10 +24,8 @@ import {
   Key,
   Loader2,
   MessageSquare,
-  Moon,
   Plug,
   Sparkles,
-  Sun,
   Wrench,
   ExternalLink,
   CheckCircle2,
@@ -85,30 +83,37 @@ function StepWelcome({ onNext }: { onNext: () => void }) {
       </a>
       <div className="flex items-center gap-2 pt-2 text-xs text-muted-foreground">
         <span>Theme</span>
-        <button
-          type="button"
-          onClick={() => setTheme("light")}
-          className={`flex items-center gap-1 rounded-md px-2 py-1 transition-colors ${
-            mounted && theme === "light"
-              ? "bg-accent text-foreground"
-              : "hover:text-foreground"
-          }`}
-        >
-          <Sun size={12} />
-          Light
-        </button>
-        <button
-          type="button"
-          onClick={() => setTheme("dark")}
-          className={`flex items-center gap-1 rounded-md px-2 py-1 transition-colors ${
-            mounted && theme === "dark"
-              ? "bg-accent text-foreground"
-              : "hover:text-foreground"
-          }`}
-        >
-          <Moon size={12} />
-          Dark
-        </button>
+        {(["clay", "indigo", "sage", "espresso", "mono"] as const).map((id) => {
+          const meta: Record<string, { label: string; bg: string; accent: string }> = {
+            clay:     { label: "Clay",     bg: "#FAF7F2", accent: "#C2410C" },
+            indigo:   { label: "Indigo",   bg: "#FAFAF7", accent: "#312E81" },
+            sage:     { label: "Sage",     bg: "#F7F8F5", accent: "#4D7C5C" },
+            espresso: { label: "Espresso", bg: "#1A1714", accent: "#E8853A" },
+            mono:     { label: "Mono",     bg: "#FAFAFA", accent: "#141414" },
+          };
+          const m = meta[id];
+          const active = mounted && theme === id;
+          return (
+            <button
+              key={id}
+              type="button"
+              onClick={() => setTheme(id)}
+              aria-label={`Theme: ${m.label}`}
+              title={m.label}
+              className={`flex items-center gap-1.5 rounded-md px-1.5 py-1 transition-colors ${
+                active ? "bg-accent text-foreground" : "hover:text-foreground"
+              }`}
+            >
+              <span
+                className="inline-flex items-center justify-center h-4 w-4 rounded-full border border-black/10"
+                style={{ background: m.bg }}
+              >
+                <span className="h-2 w-2 rounded-full" style={{ background: m.accent }} />
+              </span>
+              {active && <span className="text-[11px]">{m.label}</span>}
+            </button>
+          );
+        })}
       </div>
     </div>
   );

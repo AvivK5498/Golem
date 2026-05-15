@@ -5,11 +5,14 @@ import { Toaster as Sonner, type ToasterProps } from "sonner"
 import { CircleCheckIcon, InfoIcon, TriangleAlertIcon, OctagonXIcon, Loader2Icon } from "lucide-react"
 
 const Toaster = ({ ...props }: ToasterProps) => {
-  const { theme = "system" } = useTheme()
+  const { theme = "clay" } = useTheme()
+  // Golem's preset themes don't map 1:1 to sonner's light/dark — espresso is
+  // the only dark preset; everything else reads as light to the toast lib.
+  const sonnerTheme: ToasterProps["theme"] = theme === "espresso" ? "dark" : "light"
 
   return (
     <Sonner
-      theme={theme as ToasterProps["theme"]}
+      theme={sonnerTheme}
       className="toaster group"
       icons={{
         success: (

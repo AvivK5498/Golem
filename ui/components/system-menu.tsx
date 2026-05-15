@@ -2,14 +2,7 @@
 
 import { useState } from "react";
 import { useTheme } from "next-themes";
-import {
-  ChevronDown,
-  Github,
-  Monitor,
-  Moon,
-  RotateCw,
-  Sun,
-} from "lucide-react";
+import { ChevronDown, Github, RotateCw } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -31,14 +24,36 @@ import {
 } from "@/components/ui/alert-dialog";
 import { useRestartRequired } from "@/lib/use-restart-required";
 import { cn } from "@/lib/utils";
+import { GOLEM_THEMES, type GolemTheme } from "@/components/providers";
 
-/**
- * System menu — dropdown next to the "golem" wordmark.
- * Houses theme toggle, restart, and other personal/system actions.
- *
- * Pulses with brand color when a restart is required (state-driven from
- * useRestartRequired).
- */
+interface ThemePreset {
+  id: GolemTheme;
+  label: string;
+  swatchBg: string;     // small disc background
+  swatchAccent: string; // small disc accent dot
+  description: string;
+}
+
+const THEME_PRESETS: Record<GolemTheme, ThemePreset> = {
+  clay:     { id: "clay",     label: "Clay",     swatchBg: "#FAF7F2", swatchAccent: "#C2410C", description: "Warm cream + terracotta" },
+  indigo:   { id: "indigo",   label: "Indigo",   swatchBg: "#FAFAF7", swatchAccent: "#312E81", description: "Soft off-white + deep ink" },
+  sage:     { id: "sage",     label: "Sage",     swatchBg: "#F7F8F5", swatchAccent: "#4D7C5C", description: "Cool light + muted forest" },
+  espresso: { id: "espresso", label: "Espresso", swatchBg: "#1A1714", swatchAccent: "#E8853A", description: "Warm dark + amber" },
+  mono:     { id: "mono",     label: "Mono",     swatchBg: "#FAFAFA", swatchAccent: "#141414", description: "Neutral light, monochrome" },
+};
+
+function Swatch({ bg, accent }: { bg: string; accent: string }) {
+  return (
+    <span
+      className="inline-flex items-center justify-center h-4 w-4 rounded-full border border-black/10"
+      style={{ background: bg }}
+      aria-hidden
+    >
+      <span className="h-2 w-2 rounded-full" style={{ background: accent }} />
+    </span>
+  );
+}
+
 export function SystemMenu() {
   const { theme, setTheme } = useTheme();
   const { required: restartRequired, clear: clearRestartRequired } = useRestartRequired();
@@ -48,8 +63,6 @@ export function SystemMenu() {
     setConfirmOpen(false);
     clearRestartRequired();
     try {
-      // Fire the restart and immediately navigate to the restarting screen.
-      // The restarting page polls /api/health and redirects home when ready.
       await fetch("/api/restart", { method: "POST" }).catch(() => {
         /* ignore — platform may already be tearing down */
       });
@@ -73,26 +86,33 @@ export function SystemMenu() {
             <span className="absolute top-0.5 right-0.5 h-1.5 w-1.5 rounded-full bg-[var(--brand)] ring-2 ring-card status-dot-pulse" />
           )}
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="start" side="bottom" className="w-52">
+        <DropdownMenuContent align="start" side="bottom" className="w-60">
           <DropdownMenuGroup>
             <DropdownMenuLabel className="text-[10px] uppercase tracking-wider text-muted-foreground/60 font-medium">
               Theme
             </DropdownMenuLabel>
-            <DropdownMenuItem onClick={() => setTheme("light")}>
-              <Sun size={14} />
-              Light
-              {theme === "light" && <span className="ml-auto text-[10px] text-muted-foreground">✓</span>}
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => setTheme("dark")}>
-              <Moon size={14} />
-              Dark
-              {theme === "dark" && <span className="ml-auto text-[10px] text-muted-foreground">✓</span>}
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => setTheme("system")}>
-              <Monitor size={14} />
-              System
-              {theme === "system" && <span className="ml-auto text-[10px] text-muted-foreground">✓</span>}
-            </DropdownMenuItem>
+            {GOLEM_THEMES.map((id) => {
+              const preset = THEME_PRESETS[id];
+              const active = theme === id;
+              return (
+                <DropdownMenuItem
+                  key={id}
+                  onClick={() => setTheme(id)}
+                  className="gap-2.5"
+                >
+                  <Swatch bg={preset.swatchBg} accent={preset.swatchAccent} />
+                  <span className="flex flex-col gap-0.5 leading-tight">
+                    <span className="text-[13px]">{preset.label}</span>
+                    <span className="text-[10px] text-muted-foreground">
+                      {preset.description}
+                    </span>
+                  </span>
+                  {active && (
+                    <span className="ml-auto text-[10px] text-muted-foreground">✓</span>
+                  )}
+                </DropdownMenuItem>
+              );
+            })}
           </DropdownMenuGroup>
 
           <DropdownMenuSeparator />
