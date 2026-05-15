@@ -209,6 +209,18 @@ export function startServer(deps: ServerDeps) {
       return json(res, { status: "ok", uptime: Math.floor((Date.now() - startedAt) / 1000) });
     }
 
+    // ── Telegram token validation (wizard + tooling) ───────
+    if (req.method === "POST" && pathname === "/api/telegram/verify-token") {
+      try {
+        const body = JSON.parse(await readBody(req)) as { token?: string };
+        const { validateTelegramToken } = await import("./utils/telegram-validate.js");
+        const result = await validateTelegramToken(body.token ?? "");
+        return json(res, result, result.ok ? 200 : 400);
+      } catch (err) {
+        return json(res, { ok: false, error: (err as Error).message }, 500);
+      }
+    }
+
     // ── Setup / Onboarding ─────────────────────────────────
     if (req.method === "GET" && pathname === "/api/setup/status") {
       const hasApiKey = !!process.env.OPENROUTER_API_KEY;
