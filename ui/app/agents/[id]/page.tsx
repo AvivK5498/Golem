@@ -1788,7 +1788,7 @@ export default function AgentEditPage({ params }: { params: Promise<{ id: string
                   key={group.id}
                   type="button"
                   onClick={() => setTab(firstMember)}
-                  className={`flex items-center gap-2 px-3 py-2.5 text-[13px] border-b-2 transition-colors ${
+                  className={`flex items-center gap-2 px-3 py-2.5 text-[13px] border-b-2 transition-colors outline-none focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:rounded-sm ${
                     active
                       ? "border-[var(--primary)] text-foreground font-medium"
                       : "border-transparent text-muted-foreground hover:text-foreground"
@@ -1812,7 +1812,7 @@ export default function AgentEditPage({ params }: { params: Promise<{ id: string
                   key={m}
                   type="button"
                   onClick={() => setTab(m)}
-                  className={`text-[11px] px-2.5 py-1 rounded-md border transition-colors ${
+                  className={`text-[11px] px-2.5 py-1 rounded-md border transition-colors outline-none focus:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
                     active
                       ? "bg-[var(--brand-muted)] border-[var(--brand-muted)] text-[var(--brand-text)] font-medium"
                       : "border-border text-muted-foreground hover:text-foreground hover:bg-muted/50"
@@ -1942,166 +1942,176 @@ export default function AgentEditPage({ params }: { params: Promise<{ id: string
 
             {/* ---- Model ---- */}
             {tab === "model" && (
-              <>
-                {/* Active Model — global tiers, per-agent tier selection */}
-                <Card size="sm">
-                  <CardHeader className="border-b">
-                    <div className="flex items-center justify-between">
-                      <CardTitle className="text-xs">Active Model</CardTitle>
-                      <Badge variant="outline" className="text-[9px] border-border">live</Badge>
+              <div className="space-y-10">
+                {/* ── TIER ── */}
+                <section className="space-y-4">
+                  <div className="flex items-baseline justify-between">
+                    <div>
+                      <h3 className="text-title">Tier</h3>
+                      <p className="text-body-sm text-muted-foreground mt-1">
+                        Tiers are configured globally in{" "}
+                        <Link href="/settings" className="text-[var(--brand-text)] underline-offset-2 hover:underline">
+                          Settings
+                        </Link>
+                        .
+                      </p>
                     </div>
-                  </CardHeader>
-                  <CardContent className="space-y-3">
-                    {(() => {
-                      try {
-                        const tiersRaw = globalSettings?.["global.llm.tiers"];
-                        if (!tiersRaw) return <p className="text-[10px] text-muted-foreground">No tiers configured. Set global tiers in <a href="/settings" className="underline hover:text-foreground">Settings</a>.</p>;
-                        const tiers: Record<string, string> = JSON.parse(tiersRaw);
-                        const activeTier = settingsData?.["model_tier"] || "med";
-                        return (
-                          <>
-                            <p className="text-[10px] text-muted-foreground">Select a tier for this agent. Tiers are configured globally in <a href="/settings" className="underline hover:text-foreground">Settings</a>.</p>
-                            <div className="flex flex-wrap gap-2">
-                              {Object.entries(tiers).map(([tier, tierModel]) => (
-                                <button
-                                  key={tier}
-                                  onClick={() => saveSetting("model_tier", tier)}
-                                  className={`px-3 py-2 rounded-md text-xs border transition-colors ${
-                                    activeTier === tier
-                                      ? "bg-muted text-foreground border-border font-medium"
-                                      : "text-muted-foreground border-transparent hover:bg-muted/50 hover:border-border/50"
-                                  }`}
-                                >
-                                  <div className="font-medium">{tier}</div>
-                                  <div className="text-[9px] text-muted-foreground font-mono mt-0.5">{tierModel}</div>
-                                </button>
-                              ))}
-                            </div>
-                          </>
-                        );
-                      } catch { return null; }
-                    })()}
                     {settingsData?.["_resolvedModel"] && (
-                      <p className="text-[10px] text-muted-foreground">
-                        Currently active: <code className="font-mono text-foreground">{settingsData["_resolvedModel"]}</code>
+                      <p className="text-body-sm text-muted-foreground">
+                        Active: <code className="font-mono text-foreground">{settingsData["_resolvedModel"]}</code>
                       </p>
                     )}
-                  </CardContent>
-                </Card>
+                  </div>
+                  {(() => {
+                    try {
+                      const tiersRaw = globalSettings?.["global.llm.tiers"];
+                      if (!tiersRaw) {
+                        return (
+                          <p className="text-body-sm text-muted-foreground">
+                            No tiers configured yet — set them in Settings.
+                          </p>
+                        );
+                      }
+                      const tiers: Record<string, string> = JSON.parse(tiersRaw);
+                      const activeTier = settingsData?.["model_tier"] || "med";
+                      return (
+                        <div className="grid grid-cols-3 gap-3">
+                          {Object.entries(tiers).map(([tier, tierModel]) => {
+                            const isActive = activeTier === tier;
+                            return (
+                              <button
+                                key={tier}
+                                type="button"
+                                onClick={() => saveSetting("model_tier", tier)}
+                                className={`rounded-xl border px-4 py-3 text-left transition-all outline-none focus:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+                                  isActive
+                                    ? "bg-[var(--primary)] border-[var(--primary)] text-[var(--primary-foreground)] shadow-[var(--shadow-clay)]"
+                                    : "bg-[var(--card)] border-border text-foreground hover:border-[var(--muted-foreground)] hover:-translate-y-0.5"
+                                }`}
+                              >
+                                <div className="text-[13px] font-semibold capitalize">{tier}</div>
+                                <div className={`mt-1 text-[10px] font-mono ${isActive ? "text-[var(--primary-foreground)]/80" : "text-muted-foreground"}`}>
+                                  {tierModel}
+                                </div>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      );
+                    } catch {
+                      return null;
+                    }
+                  })()}
+                </section>
 
-                {/* Model override — pick a provider + model for this agent (auto-saves) */}
-                <Card size="sm">
-                  <CardHeader className="border-b">
-                    <div className="flex items-center justify-between">
-                      <CardTitle className="text-xs">Model Override</CardTitle>
-                      <span className="text-[9px] text-muted-foreground">this agent only — restart required</span>
-                    </div>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    <div className="flex items-center gap-3">
-                      <input
-                        type="checkbox"
-                        id="model-override-toggle"
-                        checked={modelOverrideEnabled}
-                        onChange={(e) => {
-                          setModelOverrideEnabled(e.target.checked);
-                          if (!e.target.checked) {
-                            // Clear the override — revert to tier
-                            saveSetting("llm.model", "");
-                          }
-                        }}
-                        className="h-4 w-4 rounded border-border accent-[var(--brand)]"
-                      />
-                      <label htmlFor="model-override-toggle" className="text-xs text-muted-foreground">
-                        Override tier with a specific model for this agent
-                      </label>
-                    </div>
-                    {modelOverrideEnabled && (
-                      <div className="space-y-3">
-                        {/* Provider selector — switching clears the model so the user re-picks */}
-                        <div className="flex flex-col gap-1.5">
-                          <label className={labelClass}>Provider</label>
-                          <div className="flex gap-2">
-                            {(["openrouter", "codex"] as const).map((p) => (
+                {/* ── OVERRIDE ── */}
+                <section className="space-y-4">
+                  <div className="flex items-baseline justify-between gap-2">
+                    <h3 className="text-title">Override</h3>
+                    <span className="text-caption text-muted-foreground">this agent only · restart required</span>
+                  </div>
+                  <label className="flex items-center gap-3 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={modelOverrideEnabled}
+                      onChange={(e) => {
+                        setModelOverrideEnabled(e.target.checked);
+                        if (!e.target.checked) saveSetting("llm.model", "");
+                      }}
+                    />
+                    <span className="text-body-sm">
+                      Use a specific model instead of the tier for this agent
+                    </span>
+                  </label>
+                  {modelOverrideEnabled && (
+                    <div className="space-y-4 pt-2">
+                      <div className="space-y-2">
+                        <span className={labelClass}>Provider</span>
+                        <div className="grid grid-cols-2 gap-3">
+                          {(["openrouter", "codex"] as const).map((p) => {
+                            const isActive = overrideProvider === p;
+                            return (
                               <button
                                 key={p}
                                 type="button"
                                 onClick={() => {
-                                  if (p === overrideProvider) return;
+                                  if (isActive) return;
                                   setOverrideProvider(p);
                                   setModel("");
                                   saveSetting("llm.model", "");
                                 }}
-                                className={`flex-1 px-3 py-2 rounded-md text-xs border transition-colors ${
-                                  overrideProvider === p
-                                    ? "bg-muted text-foreground border-border font-medium"
-                                    : "text-muted-foreground border-transparent hover:bg-muted/50 hover:border-border/50"
+                                className={`rounded-xl border px-4 py-3 text-left transition-all outline-none focus:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+                                  isActive
+                                    ? "bg-[var(--primary)] border-[var(--primary)] text-[var(--primary-foreground)] shadow-[var(--shadow-clay)]"
+                                    : "bg-[var(--card)] border-border text-foreground hover:border-[var(--muted-foreground)] hover:-translate-y-0.5"
                                 }`}
                               >
-                                <div className="font-medium capitalize">{p === "codex" ? "Codex (ChatGPT)" : "OpenRouter"}</div>
-                                <div className="text-[9px] text-muted-foreground mt-0.5">
-                                  {p === "codex" ? "Subscription, free under quota" : "Pay per token"}
+                                <div className="text-[13px] font-semibold">
+                                  {p === "codex" ? "Codex (ChatGPT)" : "OpenRouter"}
+                                </div>
+                                <div className={`mt-1 text-[10px] ${isActive ? "text-[var(--primary-foreground)]/80" : "text-muted-foreground"}`}>
+                                  {p === "codex" ? "Subscription · free under quota" : "Pay per token"}
                                 </div>
                               </button>
-                            ))}
-                          </div>
+                            );
+                          })}
                         </div>
-                        <ModelCombobox
-                          value={model}
-                          onChange={(v) => { setModel(v); saveSetting("llm.model", v); }}
-                          models={models?.filter((m) => (m.provider ?? "openrouter") === overrideProvider)}
-                          label="Model"
-                        />
-                        {model && (
-                          <p className="text-[11px] text-[var(--status-warning)]">
-                            This agent will use <code className="font-mono">{model}</code> instead of the tier-assigned model.
-                          </p>
-                        )}
                       </div>
-                    )}
-                  </CardContent>
-                </Card>
-
-                {/* Model settings — applies regardless of whether the model is tier-resolved or overridden */}
-                <Card size="sm">
-                  <CardHeader className="border-b">
-                    <div className="flex items-center justify-between">
-                      <CardTitle className="text-xs">Model Settings</CardTitle>
-                      <span className="text-[9px] text-muted-foreground">restart required</span>
+                      <ModelCombobox
+                        value={model}
+                        onChange={(v) => { setModel(v); saveSetting("llm.model", v); }}
+                        models={models?.filter((m) => (m.provider ?? "openrouter") === overrideProvider)}
+                        label="Model"
+                      />
+                      {model && (
+                        <p className="text-[11px] text-[var(--status-warning)]">
+                          This agent will use <code className="font-mono">{model}</code> instead of the tier-assigned model.
+                        </p>
+                      )}
                     </div>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="flex flex-col gap-1.5">
-                        <label className={labelClass}>Temperature</label>
-                        <input type="number" value={temperature} onChange={e => setTemperature(Number(e.target.value))} min={0} max={2} step={0.1} className={numberInputClass} />
-                      </div>
-                      <div className="flex flex-col gap-1.5">
-                        <label className={labelClass}>Max Steps</label>
-                        <input type="number" value={maxSteps} onChange={e => setMaxSteps(Number(e.target.value))} min={1} max={100} className={numberInputClass} />
-                      </div>
+                  )}
+                </section>
+
+                {/* ── PARAMETERS ── */}
+                <section className="space-y-4">
+                  <div className="flex items-baseline justify-between">
+                    <h3 className="text-title">Parameters</h3>
+                    <span className="text-caption text-muted-foreground">restart required</span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-5">
+                    <div className="flex flex-col gap-1.5">
+                      <label className={labelClass}>Temperature</label>
+                      <input type="number" value={temperature} onChange={e => setTemperature(Number(e.target.value))} min={0} max={2} step={0.1} className={numberInputClass} />
                     </div>
                     <div className="flex flex-col gap-1.5">
-                      <label className={labelClass}>Reasoning Effort</label>
-                      <select
-                        value={reasoningEffort}
-                        onChange={e => setReasoningEffort(e.target.value)}
-                        className={`${inputClass} h-[38px]`}
-                      >
-                        <option value="xhigh">xhigh</option>
-                        <option value="high">high</option>
-                        <option value="medium">medium</option>
-                        <option value="low">low</option>
-                        <option value="minimal">minimal</option>
-                        <option value="none">none</option>
-                      </select>
+                      <label className={labelClass}>Max Steps</label>
+                      <input type="number" value={maxSteps} onChange={e => setMaxSteps(Number(e.target.value))} min={1} max={100} className={numberInputClass} />
                     </div>
-                    <div className="flex justify-end pt-2">
-                      <Button onClick={saveModelSettings} disabled={saving} size="sm">{saving ? "Saving..." : "Save Model Settings"}</Button>
-                    </div>
-                  </CardContent>
-                </Card>
-              </>
+                  </div>
+                  <div className="flex flex-col gap-1.5">
+                    <label className={labelClass}>Reasoning Effort</label>
+                    <select
+                      value={reasoningEffort}
+                      onChange={e => setReasoningEffort(e.target.value)}
+                      className={`${inputClass} h-[38px]`}
+                    >
+                      <option value="xhigh">xhigh</option>
+                      <option value="high">high</option>
+                      <option value="medium">medium</option>
+                      <option value="low">low</option>
+                      <option value="minimal">minimal</option>
+                      <option value="none">none</option>
+                    </select>
+                  </div>
+                </section>
+
+                {/* Single Save anchor — bottom-right of the tab */}
+                <div className="flex justify-end pt-2 border-t border-border/60">
+                  <Button onClick={saveModelSettings} disabled={saving}>
+                    {saving ? "Saving…" : "Save changes"}
+                  </Button>
+                </div>
+              </div>
             )}
 
             {/* ---- Memory ---- */}
