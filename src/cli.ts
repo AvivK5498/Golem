@@ -26,6 +26,10 @@ const COMMANDS: Record<string, () => Promise<{ run: Subcommand }>> = {
   version: () => import("./cli/version.js"),
   update: () => import("./cli/update.js"),
   doctor: () => import("./cli/doctor.js"),
+  "install-daemon": () =>
+    import("./cli/install-daemon/index.js").then((m) => ({ run: m.runInstall })),
+  "uninstall-daemon": () =>
+    import("./cli/install-daemon/index.js").then((m) => ({ run: m.runUninstall })),
 };
 
 const ALIASES: Record<string, string> = {
@@ -39,14 +43,16 @@ Usage:
   golem [command] [args]
 
 Commands:
-  start             Start the platform (default if no command given)
-  stop              Stop the running daemon
-  status            Report whether the daemon is running
-  logs [-n N] [-f]  Tail the daemon logs
-  version           Print the version
-  update            Pull the latest published version (not yet wired)
-  doctor            Run health checks
-  help, -h, --help  Show this message
+  start                       Start the platform (default if no command given)
+  stop                        Stop the running daemon
+  status                      Report whether the daemon is running
+  logs [-n N] [-f]            Tail the daemon logs
+  install-daemon [--force]    Install user systemd unit / launchd plist
+  uninstall-daemon            Remove the unit/plist and stop the daemon
+  version                     Print the version
+  update                      Pull the latest published version (not yet wired)
+  doctor                      Run health checks
+  help, -h, --help            Show this message
 
 Environment:
   GOLEM_DATA_DIR    Override the data directory (default: OS-native).

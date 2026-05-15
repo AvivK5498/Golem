@@ -19,7 +19,7 @@ const sourceEntry = resolve(root, "src", "cli.ts");
 
 const argv = process.argv.slice(2);
 const subcommand = argv[0] ?? "start";
-const isStart = subcommand === "start" || subcommand.startsWith("-") || !["stop", "status", "logs", "version", "update", "doctor", "help", "-h", "--help"].includes(subcommand);
+const isStart = subcommand === "start" || subcommand.startsWith("-") || !["stop", "status", "logs", "version", "update", "doctor", "install-daemon", "uninstall-daemon", "help", "-h", "--help"].includes(subcommand);
 
 function spawnChild() {
   // Prefer compiled dist/ if present (npm-installed), else use tsx on src/.
