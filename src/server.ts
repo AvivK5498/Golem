@@ -9,8 +9,11 @@ import { logger } from "./utils/external-logger.js";
 import { getPromptTraceById, listPromptTraces } from "./agent/prompt-trace.js";
 import { allTools } from "./agent/tools/index.js";
 import { getMCPTools } from "./agent/mcp-client.js";
-import { loadSkills, parseFrontmatter } from "./skills/loader.js";
+import { loadSkills, parseFrontmatter, clearSkillCache } from "./skills/loader.js";
 import { dataPath, getSkillsDir } from "./utils/paths.js";
+import { importSkill, previewSkill } from "./skills/import.js";
+import { readLock, updateLockEntry, removeLockEntry } from "./skills/lock.js";
+import { scanSkillDirectory } from "./skills/scanner.js";
 import { randomUUID } from "node:crypto";
 import type { JobQueue } from "./scheduler/job-queue.js";
 import type { CronStore } from "./scheduler/cron-store.js";
@@ -598,6 +601,7 @@ export function startServer(deps: ServerDeps) {
         const defaultSkillsDir = path.resolve("skills");
         const dirs = skillsDir !== defaultSkillsDir ? [skillsDir, defaultSkillsDir] : [skillsDir];
         const allSkills = loadSkills(dirs);
+        const lock = readLock();
 
         // Build usedBy map: skill name → agent IDs that have it enabled
         const usedByMap: Record<string, string[]> = {};
@@ -628,13 +632,102 @@ export function startServer(deps: ServerDeps) {
           return {
             name: s.name,
             description: s.description,
+            dir: s.dir,
             eligible: s.eligible,
             requires,
             usedBy: usedByMap[s.name] ?? [],
+            lock: lock[s.name] ?? null,
           };
         });
         return json(res, { skills });
       } catch (err) { return json(res, { error: err instanceof Error ? err.message : String(err) }, 500); }
+    }
+
+    // ── Skill install / preview / uninstall ───────────────
+    if (req.method === "POST" && pathname === "/api/skills/preview") {
+      try {
+        const body = await readBody(req);
+        const { source } = JSON.parse(body || "{}") as { source?: string };
+        if (!source || typeof source !== "string") {
+          return json(res, { error: "source is required" }, 400);
+        }
+        const preview = await previewSkill(source);
+        return json(res, preview);
+      } catch (err) {
+        return json(res, { error: err instanceof Error ? err.message : String(err) }, 400);
+      }
+    }
+
+    if (req.method === "POST" && pathname === "/api/skills/install") {
+      try {
+        const body = await readBody(req);
+        const parsed = JSON.parse(body || "{}") as {
+          source?: string;
+          ref?: string;
+          attachToAgents?: string[];
+        };
+        if (!parsed.source || typeof parsed.source !== "string") {
+          return json(res, { error: "source is required" }, 400);
+        }
+
+        const result = await importSkill({ source: parsed.source, ref: parsed.ref });
+        updateLockEntry(result.key, {
+          source: result.source,
+          sourceType: result.sourceType,
+          ref: result.ref,
+          installedAt: new Date().toISOString(),
+        });
+
+        // Post-install security scan — warnings only, never blocks.
+        const scan = scanSkillDirectory(result.destDir);
+
+        // Optional: attach to one or more agents (write into agent.skills).
+        const attachedAgents: string[] = [];
+        if (Array.isArray(parsed.attachToAgents) && parsed.attachToAgents.length > 0 && deps.agentStore) {
+          for (const agentId of parsed.attachToAgents) {
+            const cfg = deps.agentStore.getConfig(agentId);
+            if (!cfg) continue;
+            const next = Array.from(new Set([...(cfg.skills ?? []), result.key]));
+            deps.agentStore.updateConfig(agentId, { skills: next });
+            attachedAgents.push(agentId);
+          }
+        }
+
+        clearSkillCache();
+        return json(res, {
+          ok: true,
+          key: result.key,
+          source: result.source,
+          sourceType: result.sourceType,
+          ref: result.ref,
+          scan,
+          attachedAgents,
+        });
+      } catch (err) {
+        logger.warn("Skill install failed", { error: err instanceof Error ? err.message : String(err) });
+        return json(res, { error: err instanceof Error ? err.message : String(err) }, 400);
+      }
+    }
+
+    const skillKeyMatch = pathname.match(/^\/api\/skills\/([a-z0-9][a-z0-9-]*)$/);
+    if (req.method === "DELETE" && skillKeyMatch) {
+      try {
+        const key = skillKeyMatch[1];
+        const target = path.resolve(getSkillsDir(), key);
+        const skillsRoot = path.resolve(getSkillsDir()) + path.sep;
+        if (!target.startsWith(skillsRoot)) {
+          return json(res, { error: "invalid skill path" }, 400);
+        }
+        if (!fs.existsSync(target)) {
+          return json(res, { error: `skill not found: ${key}` }, 404);
+        }
+        fs.rmSync(target, { recursive: true, force: true });
+        removeLockEntry(key);
+        clearSkillCache();
+        return json(res, { ok: true, key });
+      } catch (err) {
+        return json(res, { error: err instanceof Error ? err.message : String(err) }, 500);
+      }
     }
 
     // ── Crons CRUD ────────────────────────────────────────
