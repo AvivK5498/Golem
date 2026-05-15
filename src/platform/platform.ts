@@ -25,7 +25,7 @@ import type { Memory } from "@mastra/memory";
 import { LibSQLStore } from "@mastra/libsql";
 import { CronExpressionParser } from "cron-parser";
 
-import { dataPath } from "../utils/paths.js";
+import { dataPath, describeDataDirResolution } from "../utils/paths.js";
 import { initMCPClient, getMCPTools, disconnectMCP } from "../agent/mcp-client.js";
 import { getModelForId } from "../agent/model.js";
 import { allTools } from "../agent/tools/index.js";
@@ -969,7 +969,8 @@ function registerAgentTransport(
 
 export async function startPlatform(): Promise<PlatformContext> {
   console.log("[platform] starting multi-agent platform...");
-  logger.info("platform starting");
+  const dataDir = describeDataDirResolution();
+  logger.info("platform starting", { dataDir: dataDir.path, dataDirSource: dataDir.source });
   const startedAt = Date.now();
 
   // 1. Shared memory storage

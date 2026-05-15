@@ -31,6 +31,7 @@ import {
   Wrench,
   ExternalLink,
   CheckCircle2,
+  AlertCircle,
 } from "lucide-react";
 import type { OpenRouterModel } from "@/lib/types";
 
@@ -502,7 +503,43 @@ function StepTelegram({
   onNext: () => void;
   onBack: () => void;
 }) {
-  const isValid = botToken.includes(":") && botToken.length > 30;
+  const looksValid = botToken.includes(":") && botToken.length > 30;
+  const [verifyStatus, setVerifyStatus] = useState<"idle" | "checking" | "ok" | "fail">("idle");
+  const [verifyMessage, setVerifyMessage] = useState<string>("");
+
+  // Re-arm verification whenever the token changes
+  useEffect(() => {
+    setVerifyStatus("idle");
+    setVerifyMessage("");
+  }, [botToken]);
+
+  async function handleNext() {
+    if (!looksValid) return;
+    setVerifyStatus("checking");
+    setVerifyMessage("Talking to Telegram...");
+    try {
+      const resp = await fetch("/api/telegram/verify-token", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token: botToken }),
+      });
+      const result = (await resp.json()) as
+        | { ok: true; botUsername: string }
+        | { ok: false; error: string };
+      if (result.ok) {
+        setVerifyStatus("ok");
+        setVerifyMessage(`Connected as @${result.botUsername}`);
+        // Brief pause so the user sees the confirmation, then advance
+        setTimeout(onNext, 600);
+      } else {
+        setVerifyStatus("fail");
+        setVerifyMessage(result.error);
+      }
+    } catch (err) {
+      setVerifyStatus("fail");
+      setVerifyMessage((err as Error).message);
+    }
+  }
 
   return (
     <div className="space-y-6">
@@ -537,6 +574,19 @@ function StepTelegram({
               placeholder="123456:ABC-DEF1234ghIkl-zyx57W2v..."
               className="font-mono"
             />
+            {verifyStatus !== "idle" && (
+              <p
+                className={
+                  verifyStatus === "ok"
+                    ? "text-xs text-green-600 dark:text-green-400"
+                    : verifyStatus === "fail"
+                      ? "text-xs text-red-600 dark:text-red-400"
+                      : "text-xs text-muted-foreground"
+                }
+              >
+                {verifyMessage}
+              </p>
+            )}
           </div>
 
           <div className="space-y-2">
@@ -561,8 +611,8 @@ function StepTelegram({
         <Button variant="outline" onClick={onBack} className="gap-1">
           <ArrowLeft size={14} /> Back
         </Button>
-        <Button onClick={onNext} disabled={!isValid} className="gap-1">
-          Next <ArrowRight size={14} />
+        <Button onClick={handleNext} disabled={!looksValid || verifyStatus === "checking"} className="gap-1">
+          {verifyStatus === "checking" ? "Verifying..." : <>Next <ArrowRight size={14} /></>}
         </Button>
       </div>
     </div>
@@ -910,21 +960,25 @@ function StepDone({ agentName }: { agentName: string }) {
   const router = useRouter();
   const [restarting, setRestarting] = useState(false);
   const [ready, setReady] = useState(false);
+  const [failed, setFailed] = useState(false);
 
   async function handleRestart() {
     setRestarting(true);
+    setFailed(false);
     try {
       await fetch("/api/restart", { method: "POST" });
-      // Poll for health
+      // Poll for health — 30 attempts × 2s = 60s budget
       for (let i = 0; i < 30; i++) {
         await new Promise((r) => setTimeout(r, 2000));
         try {
           const res = await fetch("/api/health");
-          if (res.ok) { setReady(true); return; }
+          if (res.ok) { setReady(true); setRestarting(false); return; }
         } catch { /* still down */ }
       }
+      // exhausted the poll budget without seeing /api/health come back
+      setFailed(true);
     } catch {
-      toast.error("Restart failed");
+      setFailed(true);
     }
     setRestarting(false);
   }
@@ -935,7 +989,26 @@ function StepDone({ agentName }: { agentName: string }) {
 
   return (
     <div className="flex flex-col items-center justify-center min-h-[400px] text-center space-y-6">
-      {!ready ? (
+      {failed ? (
+        <>
+          <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-red-100 dark:bg-red-900/30">
+            <AlertCircle size={28} className="text-red-600 dark:text-red-400" />
+          </div>
+          <div className="space-y-2">
+            <h2 className="text-xl font-semibold">Restart didn&apos;t complete in time</h2>
+            <p className="text-sm text-muted-foreground max-w-md">
+              The platform took longer than 60 seconds to come back. It may still be
+              starting, or something went wrong. Check the daemon logs and try again.
+            </p>
+            <p className="text-xs text-muted-foreground font-mono">
+              golem logs    # or: journalctl --user -u golem
+            </p>
+          </div>
+          <Button onClick={handleRestart} disabled={restarting} className="gap-1">
+            {restarting ? "Retrying..." : "Try again"}
+          </Button>
+        </>
+      ) : !ready ? (
         <>
           <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-[var(--brand-muted)]">
             <Sparkles size={28} className="text-[var(--brand-text)]" />

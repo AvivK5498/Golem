@@ -95,3 +95,4 @@ docs/brain/
 # Beads / Dolt files (added by bd init)
 .dolt/
 .beads-credential-key
+golem-agent-*.tgz
