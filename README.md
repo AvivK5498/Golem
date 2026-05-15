@@ -23,16 +23,6 @@ npm start              # opens http://localhost:3015
 
 The onboarding wizard takes it from there — providers, model tiers, your Telegram bot, your first agent's persona. Done.
 
-## Why I built Golem
-
-I'm Aviv. I love what LLMs can do, but I got tired of chatbots.
-
-Chatbots are passive. You open a tab, you type, they answer, you close the tab. That's not an assistant — that's a search bar with manners. I wanted something that *acts*: an operator that lives on my phone, reacts to webhooks, runs on a schedule, remembers what I told it last week, and uses the tools I give it without me having to babysit a prompt.
-
-I also didn't want to rent it. I wanted to own the keys, own the data, run it on a laptop under launchd, and spin up a new agent every time I had a new job to delegate.
-
-So I built Golem. One process, N agents, each with its own Telegram bot, its own persona, its own toolset, its own memory. No SaaS. No tab.
-
 ## Philosophy
 
 - **Agents act, they don't chat.** Every agent has tools, schedules, webhooks, and the agency to use them. Conversation is one input among many.
