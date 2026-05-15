@@ -28,7 +28,7 @@ export const AutoTextarea = forwardRef<HTMLTextAreaElement, AutoTextareaProps>(
         value={value}
         onChange={onChange}
         rows={minRows}
-        className={`w-full bg-card/60 border border-border rounded-md px-3 py-2 text-xs text-foreground font-mono leading-relaxed resize-none outline-none focus:border-muted-foreground transition-colors ${className ?? ""}`}
+        className={`w-full bg-card/60 border border-border rounded-md px-3 py-2 text-[13px] text-foreground leading-relaxed resize-none outline-none focus:border-muted-foreground transition-colors ${className ?? ""}`}
         style={{ overflow: "auto", maxHeight }}
         {...props}
       />

@@ -1853,20 +1853,20 @@ export default function AgentEditPage({ params }: { params: Promise<{ id: string
 
             {/* ---- Identity ---- */}
             {tab === "identity" && (
-              <div className="space-y-10">
+              <div className="space-y-8">
                 {/* ── IDENTITY ── */}
-                <section className="space-y-5">
+                <section className="space-y-4 pb-2 border-b border-border/40">
                   <div className="flex items-baseline justify-between gap-2">
                     <h3 className="text-title">Identity</h3>
                     <span className="text-caption text-muted-foreground">restart required</span>
                   </div>
-                  <div className="grid grid-cols-2 gap-5">
+                  <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-1.5">
                       <label className={labelClass}>Name</label>
                       <input value={name} onChange={e => setName(e.target.value)} className={inputClass} />
                     </div>
                     <div className="space-y-1.5">
-                      <label className={labelClass}>Character name <span className="text-muted-foreground/70 normal-case tracking-normal">— used in prompt opening, optional</span></label>
+                      <label className={labelClass}>Character name <span className="text-muted-foreground/70 normal-case tracking-normal">— optional</span></label>
                       <input value={characterName} onChange={e => setCharacterName(e.target.value)} className={inputClass} placeholder={name} />
                     </div>
                     <div className="space-y-1.5">
@@ -1876,26 +1876,24 @@ export default function AgentEditPage({ params }: { params: Promise<{ id: string
                     <div className="space-y-1.5">
                       <label className={labelClass}>Role</label>
                       <input value={role} onChange={e => setRole(e.target.value)} className={inputClass} placeholder="personal assistant" />
-                      <p className="text-caption text-muted-foreground/80 mt-1">
-                        Prompt reads: <span className="text-foreground font-mono">{ownerName || "the user"}&rsquo;s {role || "personal assistant"}</span>
-                      </p>
                     </div>
                   </div>
+                  {(ownerName || role) && (
+                    <div className="inline-flex items-center gap-2 rounded-md bg-[var(--brand-muted)] px-2.5 py-1 text-[11px]">
+                      <span className="text-muted-foreground">Prompt opens as</span>
+                      <span className="font-mono text-foreground">{ownerName || "the user"}&rsquo;s {role || "personal assistant"}</span>
+                    </div>
+                  )}
                   <div className="space-y-1.5">
                     <label className={labelClass}>Description</label>
                     <AutoTextarea value={description} onChange={e => setDescription(e.target.value)} minRows={2} maxHeight={200} />
                   </div>
-                  <div className="flex justify-end">
-                    <Button onClick={saveIdentity} disabled={saving}>
-                      {saving ? "Saving…" : "Save identity"}
-                    </Button>
-                  </div>
                 </section>
 
                 {/* ── VOICE ── */}
-                <section className="space-y-5">
+                <section className="space-y-4">
                   <h3 className="text-title">Voice</h3>
-                  <div className="grid grid-cols-2 gap-5">
+                  <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-1.5">
                       <label className={labelClass}>Response length</label>
                       <select value={behaviorResponseLength} onChange={e => setBehaviorResponseLength(e.target.value)} className={inputClass}>
@@ -1928,14 +1926,14 @@ export default function AgentEditPage({ params }: { params: Promise<{ id: string
                         <option value="structured">Structured</option>
                       </select>
                     </div>
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className={labelClass}>Language</label>
-                    <select value={behaviorLanguage} onChange={e => setBehaviorLanguage(e.target.value)} className={inputClass}>
-                      <option value="english">English</option>
-                      <option value="hebrew">Hebrew</option>
-                      <option value="auto_detect">Auto-detect</option>
-                    </select>
+                    <div className="space-y-1.5">
+                      <label className={labelClass}>Language</label>
+                      <select value={behaviorLanguage} onChange={e => setBehaviorLanguage(e.target.value)} className={inputClass}>
+                        <option value="english">English</option>
+                        <option value="hebrew">Hebrew</option>
+                        <option value="auto_detect">Auto-detect</option>
+                      </select>
+                    </div>
                   </div>
                   <div className="space-y-1.5">
                     <label className={labelClass}>Custom instructions</label>
@@ -1947,18 +1945,26 @@ export default function AgentEditPage({ params }: { params: Promise<{ id: string
                       placeholder="e.g. Always include calorie counts when discussing meals"
                     />
                   </div>
-                  <div className="flex justify-end">
-                    <Button onClick={saveBehavior} disabled={savingBehavior}>
-                      {savingBehavior ? "Saving…" : "Save voice"}
-                    </Button>
-                  </div>
                 </section>
 
-                {/* ── PROMPT PREVIEW (kept as collapsible accordion) ── */}
-                <section className="space-y-5">
+                {/* ── PROMPT PREVIEW (collapsible accordion) ── */}
+                <section className="space-y-4 pt-2 border-t border-border/40">
                   <h3 className="text-title">Prompt</h3>
                   <PromptSections agentId={id} persona={persona} onPersonaChange={setPersona} onSavePersona={() => saveMarkdown("persona", persona)} subAgents={subAgentEntries} identity={{ name, characterName, ownerName, role }} />
                 </section>
+
+                {/* Single Save anchor for Identity + Voice */}
+                <div className="flex items-center justify-end gap-3 pt-3 border-t border-border/60">
+                  <Button
+                    onClick={async () => {
+                      await saveIdentity();
+                      await saveBehavior();
+                    }}
+                    disabled={saving || savingBehavior}
+                  >
+                    {saving || savingBehavior ? "Saving…" : "Save changes"}
+                  </Button>
+                </div>
               </div>
             )}
 
