@@ -426,6 +426,9 @@
     font-size: 15px;
     line-height: 1.55;
     font-feature-settings: "ss01", "cv11";
+    /* Theme-aware native form controls — every checkbox/radio/range/progress
+       on the page picks up the active --primary as its accent-color. */
+    accent-color: var(--primary);
   }
   html {
     @apply font-sans;
@@ -526,69 +529,74 @@ html[data-theme] {
    FORM CONTROLS — Clay-styled native inputs.
    Targets all <input type="checkbox"> / [type="radio"] across the app
    without touching component code. Theme-aware via --primary.
+   Wrapped in @layer base so Tailwind v4 / Turbopack don't strip
+   the unprefixed selectors as dead code.
    ════════════════════════════════════════════════════════ */
-input[type="checkbox"]:not([data-native]) {
-  appearance: none;
-  -webkit-appearance: none;
-  width: 16px;
-  height: 16px;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  background: var(--card);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.55), 0 1px 1px rgba(0, 0, 0, 0.03);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  vertical-align: middle;
-  position: relative;
-  transition: background-color 140ms ease, border-color 140ms ease, box-shadow 140ms ease;
-}
-input[type="checkbox"]:not([data-native]):hover:not(:disabled) {
-  border-color: var(--muted-foreground);
-}
-input[type="checkbox"]:not([data-native]):checked {
-  background: var(--primary);
-  border-color: var(--primary);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.2), 0 1px 2px rgba(0, 0, 0, 0.08);
-}
-input[type="checkbox"]:not([data-native]):checked::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none'><path d='M4 8.5l2.5 2.5L12 5.5' stroke='%23FFF7F0' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'/></svg>");
-  background-size: 100% 100%;
-  background-repeat: no-repeat;
-}
-input[type="checkbox"]:not([data-native]):focus-visible {
-  outline: 2px solid var(--ring);
-  outline-offset: 1px;
-}
-input[type="checkbox"]:not([data-native]):disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
+@layer base {
+  input[type="checkbox"]:not([data-native]) {
+    appearance: none;
+    -webkit-appearance: none;
+    width: 16px;
+    height: 16px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--card);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.55), 0 1px 1px rgba(0, 0, 0, 0.03);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    vertical-align: middle;
+    position: relative;
+    transition: background-color 140ms ease, border-color 140ms ease, box-shadow 140ms ease;
+    flex-shrink: 0;
+  }
+  input[type="checkbox"]:not([data-native]):hover:not(:disabled) {
+    border-color: var(--muted-foreground);
+  }
+  input[type="checkbox"]:not([data-native]):checked {
+    background: var(--primary);
+    border-color: var(--primary);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.2), 0 1px 2px rgba(0, 0, 0, 0.08);
+  }
+  input[type="checkbox"]:not([data-native]):checked::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none'><path d='M4 8.5l2.5 2.5L12 5.5' stroke='%23FFF7F0' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'/></svg>");
+    background-size: 100% 100%;
+    background-repeat: no-repeat;
+  }
+  input[type="checkbox"]:not([data-native]):focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 1px;
+  }
+  input[type="checkbox"]:not([data-native]):disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
 
-input[type="radio"]:not([data-native]) {
-  appearance: none;
-  -webkit-appearance: none;
-  width: 16px;
-  height: 16px;
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  background: var(--card);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.55);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  vertical-align: middle;
-  transition: background-color 140ms ease, border-color 140ms ease;
-}
-input[type="radio"]:not([data-native]):checked {
-  border-color: var(--primary);
-  background: var(--primary);
-  box-shadow: inset 0 0 0 3px var(--card);
+  input[type="radio"]:not([data-native]) {
+    appearance: none;
+    -webkit-appearance: none;
+    width: 16px;
+    height: 16px;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    background: var(--card);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.55);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    vertical-align: middle;
+    transition: background-color 140ms ease, border-color 140ms ease;
+  }
+  input[type="radio"]:not([data-native]):checked {
+    border-color: var(--primary);
+    background: var(--primary);
+    box-shadow: inset 0 0 0 3px var(--card);
+  }
 }
 
 /* Status dot animation */

@@ -2283,103 +2283,109 @@ export default function AgentEditPage({ params }: { params: Promise<{ id: string
 
             {/* ---- Tools / MCP / Skills ---- */}
             {tab === "tools" && (
-              <>
-                {/* Always-available tools (locked) */}
-                <Card size="sm">
-                  <CardHeader className="border-b">
-                    <div className="flex items-center gap-2">
-                      <CardTitle className="text-xs">Always Available</CardTitle>
-                      <span className="text-[10px] text-muted-foreground">all agents</span>
-                    </div>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="grid grid-cols-2 gap-x-4 gap-y-1">
-                      {(alwaysToolsData?.tools || []).map(tool => (
-                        <label key={tool} className="flex items-center gap-2 py-0.5 opacity-60">
-                          <input type="checkbox" checked disabled
-                            className="rounded border-border bg-accent accent-purple-500" />
-                          <span className="text-[10px] text-muted-foreground">{tool}</span>
+              <div className="space-y-8">
+                {/* ── ALWAYS AVAILABLE ── */}
+                <section className="space-y-3 pb-2 border-b border-border/40">
+                  <div className="flex items-baseline justify-between gap-2">
+                    <h3 className="text-title">Always available</h3>
+                    <span className="text-caption text-muted-foreground">every agent</span>
+                  </div>
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-x-5 gap-y-1.5 opacity-60">
+                    {(alwaysToolsData?.tools || []).map((tool) => (
+                      <label key={tool} className="flex items-center gap-2">
+                        <input type="checkbox" checked disabled />
+                        <span className="text-body-sm text-muted-foreground">{tool}</span>
+                      </label>
+                    ))}
+                  </div>
+                </section>
+
+                {/* ── ADDITIONAL TOOLS ── */}
+                <section className="space-y-3">
+                  <div className="flex items-baseline justify-between gap-2">
+                    <h3 className="text-title">
+                      Tools
+                      <span className="ml-2 text-body-sm font-normal text-muted-foreground">
+                        {selectedTools.filter((t) => !(alwaysToolsData?.tools || []).includes(t)).length} selected
+                      </span>
+                    </h3>
+                  </div>
+                  {!toolsData && <p className="text-body-sm text-muted-foreground">Loading tools…</p>}
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-x-5 gap-y-1.5 max-h-[280px] overflow-y-auto pr-1">
+                    {toolsData?.tools
+                      .filter((t) => {
+                        if ((alwaysToolsData?.tools || []).includes(t)) return false;
+                        const mcpServers = Object.keys(mcpToolsData?.servers || {});
+                        return !mcpServers.some((s) => t.startsWith(`${s}_`));
+                      })
+                      .map((tool) => (
+                        <label key={tool} className="flex items-center gap-2 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={selectedTools.includes(tool)}
+                            onChange={() => toggleTool(tool)}
+                          />
+                          <span className="text-body-sm text-muted-foreground truncate">{tool}</span>
                         </label>
                       ))}
-                    </div>
-                  </CardContent>
-                </Card>
+                  </div>
+                </section>
 
-                {/* Optional tools */}
-                <Card size="sm">
-                  <CardHeader className="border-b">
-                    <div className="flex items-center gap-2">
-                      <CardTitle className="text-xs">Additional Tools</CardTitle>
-                      <span className="text-[10px] text-muted-foreground">({selectedTools.filter(t => !(alwaysToolsData?.tools || []).includes(t)).length} selected)</span>
-                    </div>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="bg-background/50 border border-border/60 rounded-md p-3 max-h-[300px] overflow-y-auto">
-                      {!toolsData && <p className="text-[10px] text-muted-foreground">Loading tools...</p>}
-                      <div className="grid grid-cols-2 gap-x-4 gap-y-1">
-                        {toolsData?.tools.filter(t => {
-                          if ((alwaysToolsData?.tools || []).includes(t)) return false;
-                          const mcpServers = Object.keys(mcpToolsData?.servers || {});
-                          return !mcpServers.some(s => t.startsWith(`${s}_`));
-                        }).map(tool => (
-                          <label key={tool} className="flex items-center gap-2 cursor-pointer group py-0.5">
-                            <input type="checkbox" checked={selectedTools.includes(tool)} onChange={() => toggleTool(tool)}
-                              className="rounded border-border bg-accent text-foreground accent-purple-500" />
-                            <span className="text-[10px] text-muted-foreground group-hover:text-foreground truncate">{tool}</span>
-                          </label>
-                        ))}
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-
-                <Separator />
-
-                {/* MCP Servers */}
-                <Card size="sm">
-                  <CardHeader className="border-b">
-                    <div className="flex items-center gap-2">
-                      <CardTitle className="text-xs">MCP Servers & Tools</CardTitle>
-                      <span className="text-[10px] text-muted-foreground">({selectedMcp.length} servers)</span>
-                    </div>
-                  </CardHeader>
-                  <CardContent className="space-y-2">
-                    {!mcpData && <p className="text-[10px] text-muted-foreground">Loading MCP servers...</p>}
-                    {mcpData?.servers.map(server => {
+                {/* ── MCP SERVERS ── */}
+                <section className="space-y-3 pt-2 border-t border-border/40">
+                  <div className="flex items-baseline justify-between gap-2">
+                    <h3 className="text-title">
+                      MCP servers
+                      <span className="ml-2 text-body-sm font-normal text-muted-foreground">
+                        {selectedMcp.length} enabled
+                      </span>
+                    </h3>
+                  </div>
+                  <p className="text-body-sm text-muted-foreground">
+                    Enable a server for all its tools, or check individual tools below.
+                  </p>
+                  {!mcpData && <p className="text-body-sm text-muted-foreground">Loading MCP servers…</p>}
+                  <div className="space-y-3">
+                    {mcpData?.servers.map((server) => {
                       const isEnabled = selectedMcp.includes(server);
                       const serverTools = mcpToolsData?.servers?.[server] || [];
                       const enabledToolCount = isEnabled
-                        ? serverTools.filter(t => selectedTools.includes(t) || !selectedTools.some(st => st.startsWith(`${server}_`))).length
-                        : serverTools.filter(t => selectedTools.includes(t)).length;
-
+                        ? serverTools.length
+                        : serverTools.filter((t) => selectedTools.includes(t)).length;
                       return (
-                        <div key={server} className="bg-background/50 border border-border/60 rounded-md p-3">
-                          <label className="flex items-center gap-2 cursor-pointer group">
-                            <input type="checkbox" checked={isEnabled} onChange={() => {
-                              toggleMcp(server);
-                              if (isEnabled) {
-                                setSelectedTools(prev => prev.filter(t => !t.startsWith(`${server}_`)));
-                              }
-                            }}
-                              className="rounded border-border bg-accent text-foreground accent-[var(--brand)]" />
-                            <span className={`text-xs group-hover:text-foreground font-medium ${isEnabled ? "text-foreground" : "text-muted-foreground"}`}>{server}</span>
-                            <span className="text-[10px] text-muted-foreground ml-auto">
-                              {isEnabled ? `all ${serverTools.length} tools` : enabledToolCount > 0 ? `${enabledToolCount}/${serverTools.length} tools` : `${serverTools.length} tools`}
+                        <div key={server} className="space-y-2">
+                          <label className="flex items-center gap-2 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={isEnabled}
+                              onChange={() => {
+                                toggleMcp(server);
+                                if (isEnabled) {
+                                  setSelectedTools((prev) => prev.filter((t) => !t.startsWith(`${server}_`)));
+                                }
+                              }}
+                            />
+                            <span className={`text-[13px] font-semibold ${isEnabled ? "text-foreground" : "text-muted-foreground"}`}>
+                              {server}
+                            </span>
+                            <span className="text-caption text-muted-foreground ml-auto">
+                              {isEnabled ? `all ${serverTools.length} tools` : `${enabledToolCount}/${serverTools.length} selected`}
                             </span>
                           </label>
                           {serverTools.length > 0 && (
-                            <div className="mt-2 pl-5 grid grid-cols-2 gap-x-4 gap-y-1">
-                              {serverTools.map(tool => {
+                            <div className="pl-6 grid grid-cols-2 md:grid-cols-3 gap-x-5 gap-y-1.5">
+                              {serverTools.map((tool) => {
                                 const shortName = tool.replace(`${server}_`, "");
                                 const isToolEnabled = isEnabled || selectedTools.includes(tool);
                                 return (
-                                  <label key={tool} className="flex items-center gap-2 cursor-pointer group py-0.5">
-                                    <input type="checkbox"
+                                  <label key={tool} className="flex items-center gap-2 cursor-pointer">
+                                    <input
+                                      type="checkbox"
                                       checked={isToolEnabled}
                                       disabled={isEnabled}
                                       onChange={() => toggleTool(tool)}
-                                      className="rounded border-border bg-accent accent-[var(--brand)]" />
-                                    <span className={`text-[10px] truncate ${isToolEnabled ? "text-muted-foreground group-hover:text-foreground" : "text-muted-foreground"}`}>{shortName}</span>
+                                    />
+                                    <span className="text-body-sm text-muted-foreground truncate">{shortName}</span>
                                   </label>
                                 );
                               })}
@@ -2388,79 +2394,78 @@ export default function AgentEditPage({ params }: { params: Promise<{ id: string
                         </div>
                       );
                     })}
-                    <p className="text-[10px] text-muted-foreground mt-1">
-                      Enable a server for all its tools, or select individual tools without enabling the server.
-                    </p>
-                  </CardContent>
-                </Card>
+                  </div>
+                </section>
 
-                <Separator />
-
-                {/* Workspace Access */}
-                <Card size="sm">
-                  <CardHeader className="border-b">
-                    <CardTitle className="text-xs">Workspace Access</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="space-y-1">
-                      <label className="flex items-center gap-2 cursor-pointer group py-0.5">
-                        <input type="checkbox"
-                          checked={selectedTools.includes("workspace_read") || selectedSkills.length > 0}
-                          onChange={() => toggleTool("workspace_read")}
-                          disabled={selectedSkills.length > 0}
-                          className="rounded border-border bg-accent accent-yellow-500 disabled:opacity-50" />
-                        <span className="text-[10px] text-muted-foreground group-hover:text-foreground">workspace_read</span>
-                        <span className="text-[10px] text-muted-foreground">
-                          {selectedSkills.length > 0 ? "-- enabled by skills" : "-- read-only filesystem access"}
+                {/* ── WORKSPACE ACCESS ── */}
+                <section className="space-y-3 pt-2 border-t border-border/40">
+                  <h3 className="text-title">Workspace access</h3>
+                  <div className="space-y-2">
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={selectedTools.includes("workspace_read") || selectedSkills.length > 0}
+                        onChange={() => toggleTool("workspace_read")}
+                        disabled={selectedSkills.length > 0}
+                      />
+                      <span className="text-body-sm">
+                        <span className="font-mono">workspace_read</span>
+                        <span className="text-muted-foreground ml-2">
+                          {selectedSkills.length > 0 ? "· enabled by skills" : "· read-only filesystem access"}
                         </span>
+                      </span>
+                    </label>
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={selectedTools.includes("workspace_write")}
+                        onChange={() => toggleTool("workspace_write")}
+                      />
+                      <span className="text-body-sm">
+                        <span className="font-mono">workspace_write</span>
+                        <span className="text-muted-foreground ml-2">· read-write filesystem access</span>
+                      </span>
+                    </label>
+                  </div>
+                </section>
+
+                {/* ── SKILLS ── */}
+                <section className="space-y-3 pt-2 border-t border-border/40">
+                  <div className="flex items-baseline justify-between gap-2">
+                    <h3 className="text-title">
+                      Skills
+                      <span className="ml-2 text-body-sm font-normal text-muted-foreground">
+                        {selectedSkills.length} selected
+                      </span>
+                    </h3>
+                  </div>
+                  {!skillsData && <p className="text-body-sm text-muted-foreground">Loading skills…</p>}
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-x-5 gap-y-1.5 max-h-[240px] overflow-y-auto pr-1">
+                    {skillsData?.skills.map((skill) => (
+                      <label key={skill.name} className="flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={selectedSkills.includes(skill.name)}
+                          onChange={() => toggleSkill(skill.name)}
+                        />
+                        <span className="text-body-sm text-muted-foreground truncate">{skill.name}</span>
+                        {!skill.eligible && (
+                          <Badge className="text-[9px] bg-[var(--status-warning-bg)] text-[var(--status-warning)] border-0 px-1 py-0">
+                            ineligible
+                          </Badge>
+                        )}
                       </label>
-                      <label className="flex items-center gap-2 cursor-pointer group py-0.5">
-                        <input type="checkbox" checked={selectedTools.includes("workspace_write")}
-                          onChange={() => toggleTool("workspace_write")}
-                          className="rounded border-border bg-accent accent-yellow-500" />
-                        <span className="text-[10px] text-muted-foreground group-hover:text-foreground">workspace_write</span>
-                        <span className="text-[10px] text-muted-foreground">-- read-write filesystem access</span>
-                      </label>
-                    </div>
-                  </CardContent>
-                </Card>
+                    ))}
+                  </div>
+                </section>
 
-                <Separator />
-
-                {/* Skills */}
-                <Card size="sm">
-                  <CardHeader className="border-b">
-                    <div className="flex items-center gap-2">
-                      <CardTitle className="text-xs">Skills</CardTitle>
-                      <span className="text-[10px] text-muted-foreground">({selectedSkills.length} selected)</span>
-                    </div>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="bg-background/50 border border-border/60 rounded-md p-3 max-h-[240px] overflow-y-auto">
-                      {!skillsData && <p className="text-[10px] text-muted-foreground">Loading skills...</p>}
-                      <div className="grid grid-cols-2 gap-x-4 gap-y-1">
-                        {skillsData?.skills.map(skill => (
-                          <label key={skill.name} className="flex items-center gap-2 cursor-pointer group py-0.5">
-                            <input type="checkbox" checked={selectedSkills.includes(skill.name)}
-                              onChange={() => toggleSkill(skill.name)}
-                              className="rounded border-border bg-accent accent-[var(--brand)]" />
-                            <span className="text-[10px] text-muted-foreground group-hover:text-foreground truncate">{skill.name}</span>
-                            {!skill.eligible && (
-                              <Badge className="text-[9px] bg-[var(--status-warning-bg)] text-[var(--status-warning)] border-0 px-1 py-0">ineligible</Badge>
-                            )}
-                          </label>
-                        ))}
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-
-                {/* Save footer */}
-                <div className="sticky bottom-0 bg-background/80 backdrop-blur-sm border-t border-border -mx-6 px-6 py-3 flex items-center justify-between">
-                  <span className="text-xs text-muted-foreground">Tool changes take effect immediately</span>
-                  <Button onClick={saveToolsSettings} disabled={saving} size="sm">{saving ? "Saving..." : "Save"}</Button>
+                {/* Single Save anchor */}
+                <div className="flex items-center justify-end pt-3 border-t border-border/60">
+                  <Button onClick={saveToolsSettings} disabled={saving}>
+                    {saving ? "Saving…" : "Save changes"}
+                  </Button>
                 </div>
-              </>
+              </div>
             )}
 
             {/* ---- Sub-agents ---- */}
