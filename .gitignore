@@ -27,6 +27,7 @@ config/*
 /HEARTBEAT.md
 /HEARTBEAT_NOTES.md
 /MEMORY.md
+/DESIGN.md
 
 # Experimental / dev sandboxes
 .agents/
