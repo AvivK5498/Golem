@@ -40,7 +40,7 @@ cp .env.example .env
 npm start                # http://localhost:3015
 ```
 
-For full install options, see **[docs/INSTALL.md](./docs/INSTALL.md)**. For the CLI reference, **[docs/CLI.md](./docs/CLI.md)**. For common questions, **[docs/FAQ.md](./docs/FAQ.md)**.
+For full install options, see **[docs/INSTALL.md](./docs/INSTALL.md)**. For the CLI reference, **[docs/CLI.md](./docs/CLI.md)**.
 
 ## What your agent can do
 
