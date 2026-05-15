@@ -54,6 +54,15 @@ describe("parseSource", () => {
     });
   });
 
+  test("www.skills.sh URL", () => {
+    expect(parseSource("https://www.skills.sh/juliusbrussee/caveman/caveman")).toEqual({
+      kind: "skills_sh",
+      owner: "juliusbrussee",
+      repo: "caveman",
+      skillName: "caveman",
+    });
+  });
+
   test("strips `npx skills add` prefix", () => {
     expect(parseSource("npx skills add github:anthropics/skills/release")?.skillName).toBe(
       "release",

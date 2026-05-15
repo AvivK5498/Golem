@@ -29,7 +29,7 @@ export function parseSource(raw: string): ParsedSource | null {
   }
 
   const skillsSh = trimmed.match(
-    /^https?:\/\/skills\.sh\/([^/?#\s]+)\/([^/?#\s]+)(?:\/([^/?#\s]+))?/,
+    /^https?:\/\/(?:www\.)?skills\.sh\/([^/?#\s]+)\/([^/?#\s]+)(?:\/([^/?#\s]+))?/,
   );
   if (skillsSh) {
     return {
