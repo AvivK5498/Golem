@@ -48,7 +48,7 @@
     "test": "bun test",
     "lint": "eslint src/",
     "typecheck": "tsc --noEmit",
-    "build": "rm -rf dist && tsc",
+    "build": "rm -rf dist && tsc -p tsconfig.build.json",
     "prepublishOnly": "npm run typecheck && npm run test && npm run build",
     "prepare": "husky"
   },

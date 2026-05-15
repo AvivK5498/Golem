@@ -12,26 +12,29 @@
 
 ![Welcome](screenshots/welcome.png)
 
-## From zero to your first agent in 2 minutes
+## Install on a VPS in two commands
 
 ```bash
-git clone https://github.com/AvivK5498/Golem.git
-cd Golem && npm install
-cp .env.example .env   # add your OpenRouter API key
-npm start              # opens http://localhost:3015
+npm install -g golem-agent
+golem install-daemon
 ```
 
-The onboarding wizard takes it from there — providers, model tiers, your Telegram bot, your first agent's persona. Done.
+That's it. The daemon is now running under systemd (Linux) or launchd (macOS), starts at login, and survives reboots. To configure your first agent:
 
-## Philosophy
+1. SSH to your VPS with port-forwarding:
+   ```bash
+   ssh -L 3015:localhost:3015 you@your-vps
+   ```
+2. Open **http://localhost:3015** in your laptop's browser.
+3. Walk the five-step onboarding wizard.
 
-- **Agents act, they don't chat.** Every agent has tools, schedules, webhooks, and the agency to use them. Conversation is one input among many.
-- **One bot per job.** Specialized agents beat one mega-prompt. Spin up a research agent, a code agent, a personal assistant — each with its own bot, its own boundaries.
-- **Telegram-native, not Telegram-bolted-on.** Your agents live where you already are. Voice notes in, voice replies out. Group chats, media, buttons, identity.
-- **You own the stack.** Your machine, your SQLite, your API keys, your bot tokens. Portable. Forkable. No cloud account required.
-- **Configuration is data.** No YAML to edit by hand. The web UI writes SQLite; everything is hot-reloadable.
+The UI binds to `127.0.0.1` only — never to a public interface. SSH provides the auth and the tunnel; there's no separate password to manage and no TLS to provision. Tailscale Serve and similar tools work the same way if you'd rather not tunnel every time.
+
+> First time on a Linux VPS? After `install-daemon` runs, you'll see a reminder to enable lingering: `sudo loginctl enable-linger $USER`. Without it, systemd kills your user services when you log out.
 
 ## What your agent can do out of the box
+
+![Dashboard](screenshots/dashboard.png)
 
 | Capability | What it actually means |
 |---|---|
@@ -47,138 +50,89 @@ The onboarding wizard takes it from there — providers, model tiers, your Teleg
 | **Sub-agent delegation** | A parent agent hands a job to a specialist child. Results compacted before they return. |
 | **Code agent** | Delegate coding tasks to Claude Code with live progress. Effort-based model selection. |
 | **Tool approval** | Destructive operations ping you on Telegram with Approve/Deny buttons. 15-minute expiry. |
-| **Command security** | Allowlist-based binary execution for `run_command`. You decide what shell commands an agent may run. |
-| **Conversation tempo** | Agents see elapsed time between messages and adapt — greetings, stale references, context freshness. |
 | **Phoenix observability** | OpenTelemetry traces for every turn. Full prompt/response history in the UI for debugging. |
 
-![Dashboard](screenshots/dashboard.png)
+## Managing your install
+
+Everyday operation is the `golem` CLI:
+
+```bash
+golem status        # is the daemon running? where's the data dir?
+golem logs -f       # tail the daemon logs (journald / launchd / data-dir fallback)
+golem doctor        # validate Node, disk, OpenRouter key, every bot token via getMe
+golem stop          # graceful SIGTERM with a 10s grace window
+golem start         # foreground start (the daemon uses this under systemd/launchd)
+golem update        # pull the latest published version (placeholder — manual `npm i -g` for now)
+```
+
+**Configuration lives at:**
+- `~/.local/share/golem/` on Linux (or `$XDG_DATA_HOME/golem`)
+- `~/Library/Application Support/golem/` on macOS
+- Override with `GOLEM_DATA_DIR`
+
+`golem status` prints the resolved path, and the data directory is chmod'd to `700` so secrets aren't world-readable.
+
+**Logs live at:**
+- Linux: `journalctl --user -u golem` (or `golem logs`)
+- macOS: `~/Library/Logs/com.golem.agent.log` (or `golem logs`)
+
+## Philosophy
+
+- **Agents act, they don't chat.** Every agent has tools, schedules, webhooks, and the agency to use them. Conversation is one input among many.
+- **One bot per job.** Specialized agents beat one mega-prompt. Spin up a research agent, a code agent, a personal assistant — each with its own bot, its own boundaries.
+- **Telegram-native, not Telegram-bolted-on.** Your agents live where you already are. Voice notes in, voice replies out. Group chats, media, buttons, identity.
+- **You own the stack.** Your machine, your SQLite, your API keys, your bot tokens. Portable. Forkable. No cloud account required.
+- **Configuration is data.** No YAML to edit by hand. The web UI writes SQLite; everything is hot-reloadable.
 
 ## How it works
 
-1. **`npm start`** boots the platform daemon and the Next.js control plane.
-2. **The onboarding wizard** asks for an OpenRouter key (or a Codex login), three model tiers (low/med/high), and a Telegram bot token from [@BotFather](https://t.me/BotFather).
-3. **You describe your first agent** in a sentence. Golem generates a persona, picks tools, and seeds working memory.
-4. **You message the bot on Telegram.** That's it. The agent is live. Configure tools, skills, schedules, and webhooks from the web UI as you go.
-
-## Skills
-
-Skills are markdown files that teach agents how to use tools for specific tasks. Each skill lives in `skills/<name>/SKILL.md`:
-
-```yaml
----
-name: my-skill
-description: "What this skill does"
-requires:
-  env: [API_KEY]
-  bins: [some-cli]
----
-
-# My Skill
-
-Instructions for the agent on how to use this skill...
 ```
+You ──Telegram──▶ Bot ──▶ Agent (Mastra)
+                          │
+                          ├─▶ Tools (read/write workspace, web search, code agent, ...)
+                          ├─▶ Skills (declarative SKILL.md capabilities)
+                          ├─▶ Sub-agents (delegate specialised work)
+                          ├─▶ MCP servers (any tool you can speak MCP to)
+                          ├─▶ Working memory (your coffee order)
+                          └─▶ Recall (semantic + recency)
+```
+
+The web UI doesn't reach Mastra directly. It reads/writes SQLite tables (`agents.db`, `settings.db`, `crons.db`, `feed.db`) and the platform reacts. That's why everything is hot-reloadable: change a persona, the next message uses the new one.
 
 ![Skills](screenshots/skills.png)
 
----
+## Skills
 
-## Under the hood
-
-For the engineers. Golem is a **single Node.js process**, multi-tenant by convention. No microservices, no external DB, no Kubernetes. A laptop under `launchd` is the production target.
-
-### Architecture
-
-- **Backend** (port 3847) — HTTP API, Telegram transports, agent runners, job scheduler.
-- **Web UI** (port 3015) — Next.js 16 control plane, proxied to backend.
-
-All state lives in SQLite under the data directory:
-
-| Database | Purpose |
-|---|---|
-| `agents.db` | Agent definitions (config, persona, memory template) |
-| `settings.db` | Runtime settings (model tiers, behavior, integrations) |
-| `platform-memory.db` | Conversation history and working memory |
-| `crons.db` | Scheduled tasks |
-| `jobs.db` | Async job queue (coding, HTTP polling, workflows) |
-| `feed.db` | Activity audit log |
-
-### Agent message flow
-
-```
-Telegram → Transport → Dedup → Chat classification
-  → Media processing (vision / voice transcription)
-  → AgentRunner → agent.generate() with memory + tools
-  → Response → Telegram
-```
-
-### Processors pipeline
-
-Input processors run before each LLM step, in order:
-
-- **PromptCache** — marks the Anthropic prompt-cache boundary
-- **ImageStripper** — strips base64 image data from history
-- **AsyncJobGuard** — stops the agent loop after an async job dispatch
-- **ToolCallFilter** — strips tool calls from recalled history
-- **SubAgentResultCompactor** — compacts verbose sub-agent results
-- **ToolResultSanitizer** — caps oversized tool results
-- **MessageTimestamp** — prepends `[Apr 18 09:35]` markers for tempo awareness
-- **OwnerStepBudget** — enforces a per-step tool-call budget (8 primary, 4 sub-agent)
-- **TokenLimiter** — 170K-token-per-turn ceiling
-- **ToolErrorGate** — disables tools after repeated failures
-
-Output processors run after each turn, before memory persistence:
-
-- **SubAgentResultCompactor**, **ToolResultSanitizer**, **ImageStripper**, **ReasoningStripper**, **GroupIdentity**.
-
-### LLM tiers, not model IDs
-
-Three global tiers (low / med / high) map to specific OpenRouter model IDs. Each agent stores a *tier*, not a model. Change the tier's model and every agent on it updates. Override per-agent when you need to.
-
-### Behavior dropdowns
-
-Each agent's response style is governed by five dropdowns:
-
-| Setting | Options |
-|---|---|
-| Response Length | Brief / Balanced / Detailed |
-| Agency | Execute first / Ask before acting / Consultative |
-| Tone | Casual / Balanced / Professional |
-| Format | Texting / Conversational / Structured |
-| Language | English / Hebrew / Auto-detect |
+A skill is a `SKILL.md` file with YAML frontmatter and human-readable instructions. The agent decides when to invoke one based on `description`. Two bundled skills out of the box: web-search and time-zone-aware scheduling. Add your own under `~/.local/share/golem/skills/` or set `GOLEM_SKILLS_DIR`.
 
 ## Requirements
 
-- macOS or Linux (Windows not supported yet)
-- Node.js 20+
-- An [OpenRouter](https://openrouter.ai/keys) API key, or a ChatGPT Plus/Pro subscription for Codex models
-- A Telegram bot token from [@BotFather](https://t.me/BotFather)
+- **OS:** Linux (x86_64 or arm64) or macOS. Windows isn't supported yet.
+- **Node:** 20 or newer.
+- **An OpenRouter API key** ([get one](https://openrouter.ai/keys)).
+- **A Telegram bot token** ([@BotFather](https://t.me/BotFather)).
+- **Optional:** Groq API key (free Whisper tier), ElevenLabs (TTS), a Claude Code login (delegated coding).
 
-### Environment variables
+Environment overrides:
 
-| Variable | Required | Description |
-|---|---|---|
-| `OPENROUTER_API_KEY` | Yes | OpenRouter API key for LLM access |
-| `GROQ_API_KEY` | No | Voice transcription (Whisper, free tier) |
-| `ELEVENLABS_API_KEY` | No | Voice replies (TTS) |
-| `GOLEM_DATA_DIR` | No | Custom data directory (default: `./data`) |
-| `GOLEM_SKILLS_DIR` | No | Custom skills directory (default: `./skills`) |
-
-### Optional: code agent
-
-To let your agents delegate coding tasks to [Claude Code](https://claude.ai/code):
-
-```bash
-npm install -g @anthropic-ai/claude-code
-claude login   # one-time OAuth in browser
-```
-
-Then enable the `code_agent` tool on any agent. It can write code, refactor, run tests, and install dependencies by spawning Claude Code sessions.
+| Variable | Description |
+|---|---|
+| `OPENROUTER_API_KEY` | LLM access (set by the wizard or in your `.env`) |
+| `GOLEM_DATA_DIR` | Override the data directory |
+| `GOLEM_SKILLS_DIR` | Override the skills directory |
+| `GROQ_API_KEY` | Voice transcription |
+| `ELEVENLABS_API_KEY` | Voice replies |
 
 ## Development
 
-### Test harness
+```bash
+git clone https://github.com/AvivK5498/Golem.git
+cd Golem && npm install
+cp .env.example .env
+npm start                # runs platform + Next.js dev UI together on :3015
+```
 
-A standalone CLI that exercises the full agent pipeline without Telegram. Real LLM calls, Phoenix traces, no transport mocks.
+`npm start` uses `concurrently` to bring up both processes. `bun test` runs the unit suite. `npm run test:agent "your prompt"` exercises an agent end-to-end against real LLMs without Telegram.
 
 ```bash
 npm run test:agent "Hello, what can you do?"
@@ -187,36 +141,39 @@ npm run test:agent -- --image /path/to/image.jpg "What do you see?"
 npm run test:agent -- --mount vault:/path/to/dir:rw "Read and write files under /mnt/vault"
 ```
 
-### Unit tests
+To publish a release: `npm run build && npm publish` (prepublishOnly runs typecheck + tests + build automatically).
+
+## FAQ
+
+**Why SSH tunnels instead of a public web UI with a password?**
+Exposing a self-hosted admin panel to the internet — even with auth — is one of the most reliable ways to get owned. Locking the UI to `127.0.0.1` removes that whole class of vulnerability. The trade-off is one extra `ssh -L` flag, which we think is worth it. OpenClaw and similar tools land on the same answer.
+
+**Can I run it without the daemon, just for testing?**
+Yes — `git clone` + `npm start` runs both the platform and the dev UI without installing anything system-wide. The daemon is only needed when you want Golem to run unattended.
+
+**Does it need ffmpeg?**
+No. Voice transcription sends the OGG/Opus blob straight to the Whisper API — no transcoding needed.
+
+**What about Docker?**
+Not officially supported in v1. Per-agent filesystem mounts (Obsidian vaults at `/mnt/<name>`) get awkward in Docker because every new mount needs a compose-file edit and a container restart.
+
+**How do I back up my install?**
+Stop the daemon, tar the data directory, copy it somewhere safe. The data directory is the install — everything else is reproducible from `npm install`.
 
 ```bash
-bun test
+golem stop
+tar czf golem-backup-$(date +%F).tgz -C ~/.local/share golem
 ```
+
+**How do I uninstall?**
+`golem uninstall-daemon` removes the systemd unit or launchd plist and stops the daemon. `npm uninstall -g golem-agent` removes the package itself. Your data directory stays put; remove it manually if you want a clean slate.
+
+**Which models does it use?**
+You pick three OpenRouter model IDs during onboarding — one each for the low, medium, and high tiers. Agents reference a tier (or override with a specific model). Cheap thinking on small queries, expensive thinking when it matters.
 
 ## Tech stack
 
-- **Runtime**: Node.js 20+ / TypeScript (ES modules)
-- **Agent framework**: [Mastra](https://mastra.ai) (`@mastra/core`)
-- **LLM providers**: [OpenRouter](https://openrouter.ai) (300+ models) + [OpenAI Codex](https://openai.com/index/introducing-codex/) (ChatGPT subscription, fair-use quota)
-- **Messaging**: Telegram ([grammY](https://grammy.dev))
-- **Memory**: LibSQL (conversation history + working memory)
-- **Storage**: SQLite (better-sqlite3)
-- **UI**: Next.js 16 + shadcn/ui + Tailwind CSS v4
-- **Observability**: Phoenix (OpenTelemetry)
-- **Testing**: Bun test runner
-
----
-
-## Ready to ship your AI agent?
-
-```bash
-git clone https://github.com/AvivK5498/Golem.git
-cd Golem && npm install
-cp .env.example .env
-npm start
-```
-
-Open **http://localhost:3015**, walk the wizard, message your bot. Welcome to Golem.
+Node.js 20+ · TypeScript · [Mastra](https://mastra.ai) · [OpenRouter](https://openrouter.ai) · Telegram ([grammY](https://grammy.dev)) · LibSQL + SQLite · Next.js 16 + shadcn/ui · Phoenix (OpenTelemetry) · Bun test
 
 ## License
 
