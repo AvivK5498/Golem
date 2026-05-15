@@ -17,10 +17,16 @@
  *
  * ffmpeg is NOT checked — Whisper API accepts Telegram OGG directly.
  */
+import { createRequire } from "node:module";
 import fs from "node:fs";
 import fsp from "node:fs/promises";
 
 import { dataPath, describeDataDirResolution } from "../utils/paths.js";
+
+// ESM has no global require; synthesize one bound to this module so we can
+// lazy-load the optional better-sqlite3 dependency without forcing a top-level
+// import (and without making doctor depend on AgentStore's full lifecycle).
+const require = createRequire(import.meta.url);
 import { validateOpenRouterKey } from "../utils/openrouter-validate.js";
 import { validateTelegramToken } from "../utils/telegram-validate.js";
 import { getRunningDaemon } from "./pid.js";
@@ -70,7 +76,10 @@ async function checkOpenRouterKey(): Promise<Check> {
   if (!key) return check("OpenRouter key", "fail", "OPENROUTER_API_KEY not set — run setup first");
   const r = await validateOpenRouterKey(key);
   if (r.ok) {
-    const detail = r.limitRemaining !== undefined ? `valid (credit ${r.limitRemaining.toFixed(2)})` : "valid";
+    // Some accounts have no limit set, in which case OpenRouter returns null
+    // for limit_remaining. Only format when we actually have a number.
+    const detail =
+      typeof r.limitRemaining === "number" ? `valid (credit ${r.limitRemaining.toFixed(2)})` : "valid";
     return check("OpenRouter key", "ok", detail);
   }
   return check("OpenRouter key", "fail", r.error);
@@ -91,10 +100,12 @@ function readAgentTelegramTokens(): TelegramAgentSummary[] | null {
   if (!fs.existsSync(dbPath)) return null;
 
   // Open readonly so a running daemon's writes are unaffected. Using better-sqlite3
-  // dynamically here keeps doctor decoupled from AgentStore's lifecycle (no
-  // migration runs, no schema upgrades).
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const { default: Database } = require("better-sqlite3") as { default: new (p: string, o?: { readonly?: boolean; fileMustExist?: boolean }) => { prepare(sql: string): { all(): unknown[] }; close(): void } };
+  // via createRequire here keeps doctor decoupled from AgentStore's lifecycle
+  // (no migration runs, no schema upgrades).
+  const Database = require("better-sqlite3") as new (
+    p: string,
+    o?: { readonly?: boolean; fileMustExist?: boolean },
+  ) => { prepare(sql: string): { all(): unknown[] }; close(): void };
   const db = new Database(dbPath, { readonly: true, fileMustExist: true });
   try {
     type Row = { id: string; config_json: string };
