@@ -16,6 +16,7 @@ import { randomUUID } from "node:crypto";
 import { Memory } from "@mastra/memory";
 import { LibSQLStore } from "@mastra/libsql";
 import { computeSmartLastMessages, type SmartRecallConfig } from "./memory/smart-recall.js";
+import { saveMessage } from "./memory/save-message.js";
 
 // ── Helpers ─────────────────────────────────────────────────
 
@@ -64,8 +65,6 @@ async function buildSeededMemory(seeds: SeedSpec[], bodyChars = 50): Promise<{
   });
 
   // Build all seeded messages with backdated createdAt.
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const messages: any[] = [];
   for (const seed of seeds) {
     const baseTime = Date.now() - seed.agoMs;
     for (let i = 0; i < seed.count; i++) {
@@ -74,22 +73,14 @@ async function buildSeededMemory(seeds: SeedSpec[], bodyChars = 50): Promise<{
       const role = i % 2 === 0 ? "user" : "assistant";
       // Synthesize a body of the requested length so token estimates are predictable.
       const filler = "x".repeat(Math.max(0, bodyChars - 20));
-      messages.push({
-        id: randomUUID(),
+      await saveMessage(memory, {
         role,
         threadId,
         resourceId,
+        text: `msg #${i} ${filler}`,
         createdAt: ts,
-        content: {
-          format: 2,
-          parts: [{ type: "text", text: `msg #${i} ${filler}` }],
-        },
       });
     }
-  }
-
-  if (messages.length > 0) {
-    await memory.saveMessages({ messages });
   }
 
   return { memory, threadId, resourceId };
