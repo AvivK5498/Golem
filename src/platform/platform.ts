@@ -125,7 +125,7 @@ function preprocessCommands(text: string): string {
 
 // ── PlatformScheduler ─────────────────────────────────────────
 
-class PlatformScheduler {
+export class PlatformScheduler {
   private timer: ReturnType<typeof setInterval> | null = null;
   private ticking = false;
 
