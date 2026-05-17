@@ -25,18 +25,23 @@ function intervalToCron(interval: string): string | null {
 export const cronTool = createTool({
   id: "cron",
   description:
-    "Manage scheduled jobs (action=list/add/remove/pause/resume/run). " +
-    "All jobs trigger a full agent turn with the message as prompt. " +
+    "Manage scheduled jobs (action=list/add/remove/pause/resume/run). When creating (action='add'), the MANDATORY `type` field selects behavior:\n" +
+    "- type='reminder': your `message` is sent VERBATIM to the user at the scheduled time. No agent loop. Write the text in your own voice (\"Hey, time to call your mom 📞\"). Best for true reminders.\n" +
+    "- type='agent_task': your `message` becomes the prompt for a fresh agent turn at the scheduled time. Full agent loop runs with all your tools. Best for scheduled work (\"Check open PRs and summarize\").\n" +
     `Times are interpreted in the host's local timezone (${LOCAL_TZ}); write them as the user says them. ` +
     "Call action='list' to see the current crons when needed.",
   inputSchema: z.object({
     action: z.enum(["list", "add", "remove", "pause", "resume", "run"]).describe(
       "Operation to perform: " +
       "'list' returns all crons, " +
-      "'add' creates a new cron (requires schedule + message), " +
+      "'add' creates a new cron (requires type + schedule + message), " +
       "'remove' deletes by id, " +
       "'pause'/'resume' toggles a cron by id, " +
       "'run' fires a cron immediately by id without changing its schedule."
+    ),
+    type: z.enum(["reminder", "agent_task"]).optional().describe(
+      "MANDATORY for action='add'. 'reminder' = your `message` will be sent VERBATIM to the user at the scheduled time (no agent loop runs). Write the message as if speaking to the user now. " +
+      "'agent_task' = your `message` becomes the prompt for a fresh agent turn at the scheduled time (the full agent loop runs with all tools available). Use this for scheduled work, not reminders."
     ),
     name: z.string().optional().describe("Human-readable job name. Required for 'add'."),
     schedule: z.object({
@@ -49,14 +54,27 @@ export const cronTool = createTool({
       ),
       value: z.string().describe("Interval (15m/30m/1h/2h/6h/1d), cron expression (0 9 * * 1-5), or delay (2m/30m/1h/3h)"),
     }).optional().describe("Schedule definition. Required for 'add', ignored for other actions."),
-    message: z.string().optional().describe("Agent prompt to execute on each run. Required for 'add'."),
+    message: z.string().optional().describe("Text sent verbatim (reminder) or agent prompt (agent_task) at scheduled time. Required for 'add'."),
     id: z.number().optional().describe("Cron ID for remove/pause/resume/run actions. Required for those actions, ignored for list/add."),
-    once: z.boolean().optional().describe("If true, delete the job after it fires once (for reminders). Defaults to false. Delay-kind jobs are always one-shot regardless."),
+    once: z.boolean().optional().describe("If true, delete the job after it fires once. Defaults to false. Delay-kind jobs are always one-shot regardless."),
+  }).superRefine((val, ctx) => {
+    if (val.action === "add" && !val.type) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "type is required for action='add'. Use 'reminder' or 'agent_task'.",
+        path: ["type"],
+      });
+    }
   }),
   inputExamples: [
-    { input: { action: "add", name: "check PR status", schedule: { kind: "every", value: "2h" }, message: "Check open PRs on project repo and summarize status" } },
-    { input: { action: "add", name: "daily standup", schedule: { kind: "cron", value: "0 16 * * 1-5" }, message: "Send the daily standup summary" } },
-    { input: { action: "add", name: "remind dishes", schedule: { kind: "delay", value: "2m" }, message: "Reminder: Clean the dishes" } },
+    // reminder + delay: one-shot in N minutes ("remind me in 2m to drink water")
+    { input: { action: "add", type: "reminder", name: "drink water", schedule: { kind: "delay", value: "2m" }, message: "Drink water 💧" } },
+    // reminder + cron: recurring at a fixed time ("remind me every morning at 9 to take meds")
+    { input: { action: "add", type: "reminder", name: "morning meds", schedule: { kind: "cron", value: "0 9 * * *" }, message: "Time for your morning meds 💊" } },
+    // agent_task + delay: one-shot scheduled work
+    { input: { action: "add", type: "agent_task", name: "follow-up check", schedule: { kind: "delay", value: "1h" }, message: "Check whether the deploy succeeded and summarize." } },
+    // agent_task + cron: recurring scheduled work (classic cron use)
+    { input: { action: "add", type: "agent_task", name: "daily PR status", schedule: { kind: "cron", value: "0 16 * * 1-5" }, message: "Check open PRs on project repo and summarize status." } },
     { input: { action: "list" } },
     { input: { action: "remove", id: 5 } },
   ],
@@ -85,6 +103,7 @@ export const cronTool = createTool({
 
         const targetJid = callerJid || "";
         const platform = transport?.platform || "telegram";
+        const taskKind = (input.type ?? "agent_task") === "reminder" ? "reminder" : "agent_turn";
 
         // Handle delay-based scheduling (e.g., "2m", "1h") — one-shot by default
         if (input.schedule.kind === "delay") {
@@ -100,14 +119,15 @@ export const cronTool = createTool({
             name: input.name || input.message.slice(0, 50),
             description: input.message,
             cronExpr: dummyCron,
-            taskKind: "agent_turn",
+            taskKind,
             targetJid,
             platform,
             once: true,
           });
           // Override next_run_at to the exact delay time
           cronStore.markRun(cron.id, fireAt);
-          return `Reminder #${cron.id} set${input.name ? ` ("${input.name}")` : ""}: fires at ${new Date(fireAt).toLocaleString("en-IL", { timeZone: "Asia/Jerusalem" })} (in ${input.schedule.value})`;
+          const label = taskKind === "reminder" ? "Reminder" : "Task";
+          return `${label} #${cron.id} set${input.name ? ` ("${input.name}")` : ""}: fires at ${new Date(fireAt).toLocaleString("en-IL", { timeZone: "Asia/Jerusalem" })} (in ${input.schedule.value})`;
         }
 
         let cronExpr: string;
@@ -130,7 +150,7 @@ export const cronTool = createTool({
           name: input.name || input.message.slice(0, 50),
           description: input.message,
           cronExpr,
-          taskKind: "agent_turn",
+          taskKind,
           targetJid,
           platform,
           once: input.once,
