@@ -77,6 +77,8 @@ export class CronStore {
       this.db.exec("ALTER TABLE crons ADD COLUMN once INTEGER DEFAULT 0");
     }
 
+    // Migrate legacy de-facto reminders to explicit task_kind='reminder' (reminder-UX rework).
+    this.db.exec("UPDATE crons SET task_kind = 'reminder' WHERE task_kind = 'agent_turn' AND once = 1");
   }
 
   addCron(agentId: string, params: {
