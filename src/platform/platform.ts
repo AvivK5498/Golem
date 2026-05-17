@@ -45,6 +45,8 @@ import type { AgentRegistryConfig } from "./schemas.js";
 import type { TelegramTransport } from "../transport/telegram-transport.js";
 import type { IncomingMessage } from "../transport/types.js";
 import { AgentRunner } from "./agent-runner.js";
+import { saveAssistantMessage } from "../memory/save-message.js";
+import { buildMemoryScope } from "../agent/memory-scope.js";
 import { registerConversationFlowHooks } from "../hooks/conversation-flow.js";
 import { hookRegistry } from "../hooks/index.js";
 import { parseApprovalButtonText, loadPendingToolApproval, updatePendingToolApprovalStatus } from "../agent/tool-approvals.js";
@@ -166,18 +168,40 @@ class PlatformScheduler {
               id: String(config.transport.ownerId),
             };
 
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any -- once flag not in CronJob type yet
-            const isOneShot = !!(job as any).once;
-
             // Preprocess !`command` patterns in description before use
             const description = preprocessCommands(job.description);
 
-            if (isOneShot) {
-              // One-shot reminders: send text directly, no LLM call
+            if (job.task_kind === "reminder") {
+              // Verbatim reminder path: send text, append to thread for continuity, then cleanup or advance.
               await transport.sendText(ownerAddress, description);
-              this.cronStore.deleteCron(config.id, job.id);
+
+              // Reminders always target the owner DM (group-chat reminders are not yet supported).
+              const ownerId = String(config.transport.ownerId);
+              const memoryScope = buildMemoryScope({
+                platform: "telegram",
+                chatId: ownerId,
+                ownerId,
+                promptMode: "full",
+                agentId: config.id,
+              });
+              await saveAssistantMessage(runner.getMemory(), {
+                threadId: memoryScope.thread,
+                resourceId: memoryScope.resource,
+                text: description,
+              });
+
+              if (job.once) {
+                this.cronStore.deleteCron(config.id, job.id);
+              } else {
+                try {
+                  const nextRun = CronExpressionParser.parse(job.cron_expr, { tz: LOCAL_TZ }).next().getTime();
+                  this.cronStore.markRun(job.id, nextRun);
+                } catch {
+                  this.cronStore.markRun(job.id, Date.now() + 86_400_000);
+                }
+              }
             } else {
-              // Recurring jobs: run through the agent
+              // Agent-turn path: unchanged behavior — runner.processMessage + send response.
               const result = await runner.processMessage(
                 description,
                 String(config.transport.ownerId),
@@ -187,14 +211,8 @@ class PlatformScheduler {
               if (result.text?.trim() && !isSuppressedResponse(result.text)) {
                 await transport.sendText(ownerAddress, result.text);
               }
-            }
-
-            if (!isOneShot) {
-              // Advance to next run time
               try {
-                const nextRun = CronExpressionParser.parse(job.cron_expr, { tz: LOCAL_TZ })
-                  .next()
-                  .getTime();
+                const nextRun = CronExpressionParser.parse(job.cron_expr, { tz: LOCAL_TZ }).next().getTime();
                 this.cronStore.markRun(job.id, nextRun);
               } catch {
                 this.cronStore.markRun(job.id, Date.now() + 86_400_000);
