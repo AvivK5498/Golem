@@ -179,6 +179,14 @@ export class AgentRunner {
   }
 
   /**
+   * Returns the Mastra Memory instance for this agent, if available.
+   * Used by the scheduler to append reminder messages to the owner's thread.
+   */
+  getMemory(): unknown {
+    return this.memory;
+  }
+
+  /**
    * Process an incoming message. This is the main entry point.
    */
   async processMessage(
