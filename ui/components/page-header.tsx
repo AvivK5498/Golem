@@ -37,10 +37,10 @@ export function PageHeader({ title, description, breadcrumbs, actions, children 
         </nav>
       )}
       <div className="flex items-start justify-between gap-4">
-        <div className="space-y-1">
-          <h1 className="text-[28px] font-semibold tracking-tight leading-tight">{title}</h1>
+        <div className="space-y-1.5">
+          <h1 className="text-display">{title}</h1>
           {description && (
-            <p className="text-sm text-muted-foreground">{description}</p>
+            <p className="text-body text-muted-foreground">{description}</p>
           )}
         </div>
         {actions && (

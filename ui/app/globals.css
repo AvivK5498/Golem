@@ -2,12 +2,18 @@
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 
-@custom-variant dark (&:is(.dark *));
+/*
+  Tailwind `dark:` utilities fire under the legacy `.dark` class OR under
+  any data-theme attribute whose palette is dark. Keep the list in sync
+  with the dark presets below (currently: espresso).
+*/
+@custom-variant dark (&:is(.dark *, [data-theme="espresso"] *));
 
 @theme inline {
   /* ── Fonts ─────────────────────────────────────────── */
-  --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, sans-serif;
-  --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", "Cascadia Code", "Fira Code", monospace;
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-display: var(--font-jost), var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-jetbrains), ui-monospace, "SF Mono", "Cascadia Code", "Fira Code", monospace;
 
   /* ── shadcn semantic mappings ──────────────────────── */
   --color-background: var(--background);
@@ -46,125 +52,22 @@
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
 
-  /* ── Radius scale ──────────────────────────────────── */
-  --radius-sm: 4px;
-  --radius-md: 6px;
-  --radius-lg: 8px;
-  --radius-xl: 12px;
-  --radius-2xl: 16px;
-  --radius-3xl: 20px;
-  --radius-4xl: 24px;
+  /* ── Radius scale — bumped to "squircle territory" per 2026 trend ─ */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-xl: 20px;
+  --radius-2xl: 24px;
+  --radius-3xl: 28px;
+  --radius-4xl: 32px;
 }
 
 /* ════════════════════════════════════════════════════════
-   LIGHT THEME (default)
-   Mastra-inspired: clean white, green accent, 3-layer depth
+   STATUS PALETTE — constant across every theme.
+   Status colors are not themed; success/warn/error/info must
+   read as themselves regardless of brand accent.
    ════════════════════════════════════════════════════════ */
 :root {
-  --radius: 8px;
-
-  /* Backgrounds — 3-layer depth system */
-  --background: #FAFAFA;
-  --card: #FFFFFF;
-  --popover: #FFFFFF;
-  --muted: #F4F4F5;            /* inset areas, code blocks */
-
-  /* Brand accent — green signature */
-  --primary: #18FB6F;
-  --primary-foreground: #052E16; /* dark green text on green bg */
-
-  /* Neutral actions */
-  --secondary: #F4F4F5;
-  --secondary-foreground: #141414;
-
-  /* Subtle backgrounds */
-  --accent: #F4F4F5;
-  --accent-foreground: #141414;
-
-  /* Text hierarchy */
-  --foreground: #2A2A2E;        /* primary text — softer charcoal, easier on the eye than pure black */
-  --card-foreground: #2A2A2E;
-  --popover-foreground: #2A2A2E;
-  --muted-foreground: #6B6B70;  /* secondary text — body, descriptions */
-
-  /* Semantic status */
-  --destructive: #DC2626;
-
-  /* Borders */
-  --border: #E4E4E7;
-  --input: #E4E4E7;
-  --ring: #18FB6F;              /* focus ring — green signature */
-
-  /* Chart palette — green-anchored */
-  --chart-1: #18FB6F;
-  --chart-2: #02792F;
-  --chart-3: #2563EB;
-  --chart-4: #8B5CF6;
-  --chart-5: #F59E0B;
-
-  /* Sidebar */
-  --sidebar: #FFFFFF;
-  --sidebar-foreground: #5F5F5F;
-  --sidebar-primary: #18FB6F;
-  --sidebar-primary-foreground: #052E16;
-  --sidebar-accent: #F0FDF4;    /* green tint for active nav */
-  --sidebar-accent-foreground: #02792F;
-  --sidebar-border: #F4F4F5;
-  --sidebar-ring: #18FB6F;
-}
-
-/* ════════════════════════════════════════════════════════
-   DARK THEME
-   Off-black backgrounds, green accent pops harder
-   ════════════════════════════════════════════════════════ */
-.dark {
-  --background: #111113;
-  --card: #1A1A1C;
-  --popover: #1A1A1C;
-  --muted: #222224;
-
-  --primary: #18FB6F;
-  --primary-foreground: #052E16;
-
-  --secondary: #222224;
-  --secondary-foreground: #F5F5F7;
-
-  --accent: #222224;
-  --accent-foreground: #F5F5F7;
-
-  --foreground: #F5F5F7;        /* off-white, not pure #FFF */
-  --card-foreground: #F5F5F7;
-  --popover-foreground: #F5F5F7;
-  --muted-foreground: rgba(245, 245, 247, 0.5);
-
-  --destructive: #F87171;
-
-  --border: rgba(255, 255, 255, 0.08);
-  --input: rgba(255, 255, 255, 0.12);
-  --ring: #18FB6F;
-
-  --chart-1: #18FB6F;
-  --chart-2: #4ADE80;
-  --chart-3: #60A5FA;
-  --chart-4: #A78BFA;
-  --chart-5: #FACC15;
-
-  --sidebar: #1A1A1C;
-  --sidebar-foreground: rgba(245, 245, 247, 0.5);
-  --sidebar-primary: #18FB6F;
-  --sidebar-primary-foreground: #052E16;
-  --sidebar-accent: rgba(24, 251, 111, 0.08);
-  --sidebar-accent-foreground: #4ADE80;
-  --sidebar-border: rgba(255, 255, 255, 0.06);
-  --sidebar-ring: #18FB6F;
-}
-
-/* ════════════════════════════════════════════════════════
-   CUSTOM DESIGN TOKENS (non-shadcn)
-   Referenced directly in components via var()
-   ════════════════════════════════════════════════════════ */
-:root {
-  /* Status colors */
   --status-success: #16A34A;
   --status-success-bg: #F0FDF4;
   --status-warning: #CA8A04;
@@ -173,29 +76,271 @@
   --status-error-bg: #FEF2F2;
   --status-info: #2563EB;
   --status-info-bg: #EFF6FF;
-
-  /* Brand shades */
-  --brand: #18FB6F;
-  --brand-hover: #10E85F;
-  --brand-muted: #DCFCE7;
-  --brand-text: #02792F;
-
-  /* Hover/interaction */
-  --bg-hover: #F0F0F1;
-  --border-subtle: #F4F4F5;
-
-  /* Shadows */
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.04);
-  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.06);
-  --shadow-lg: 0 8px 30px rgba(0, 0, 0, 0.10);
-
-  /* Text levels (direct access) */
-  --text-primary: #141414;
-  --text-secondary: #5F5F5F;
-  --text-tertiary: #A1A1AA;
 }
 
-.dark {
+/* ════════════════════════════════════════════════════════
+   CLAY — default theme. Warm cream + terracotta.
+   Handcrafted / organic / opinionated.
+   ════════════════════════════════════════════════════════ */
+:root,
+[data-theme="clay"] {
+  --radius: 14px;
+
+  --background: #FAF7F2;
+  --card: #FFFCF7;
+  --popover: #FFFCF7;
+  --muted: #F2EDE5;
+
+  --primary: #C2410C;
+  --primary-foreground: #FFF7F0;
+
+  --secondary: #F2EDE5;
+  --secondary-foreground: #1F1A14;
+
+  --accent: #F2EDE5;
+  --accent-foreground: #1F1A14;
+
+  --foreground: #1F1A14;
+  --card-foreground: #1F1A14;
+  --popover-foreground: #1F1A14;
+  --muted-foreground: #5A4D3D;
+
+  --destructive: #B91C1C;
+
+  --border: #E8DECF;
+  --input: #E8DECF;
+  --ring: #C2410C;
+
+  --chart-1: #C2410C;
+  --chart-2: #4D7C5C;
+  --chart-3: #312E81;
+  --chart-4: #8B5CF6;
+  --chart-5: #CA8A04;
+
+  --sidebar: #FFFCF7;
+  --sidebar-foreground: #5A4D3D;
+  --sidebar-primary: #C2410C;
+  --sidebar-primary-foreground: #FFF7F0;
+  --sidebar-accent: #C2410C;
+  --sidebar-accent-foreground: #FFF7F0;
+  --sidebar-border: #F0E9DD;
+  --sidebar-ring: #C2410C;
+
+  --brand: #C2410C;
+  --brand-hover: #9A3412;
+  --brand-muted: #F8EDE3;
+  --brand-text: #9A3412;
+
+  --bg-hover: #F2EDE5;
+  --border-subtle: #F0E9DD;
+
+  /* Tactile clay shadows — soft inner highlight + warmer outer shadow */
+  --shadow-sm: 0 1px 2px rgba(60, 40, 20, 0.05), inset 0 1px 0 rgba(255, 255, 255, 0.4);
+  --shadow-md: 0 4px 16px rgba(60, 40, 20, 0.07), inset 0 1px 0 rgba(255, 255, 255, 0.5);
+  --shadow-lg: 0 12px 36px rgba(60, 40, 20, 0.12);
+  --shadow-clay: 0 1px 2px rgba(60, 40, 20, 0.04), 0 2px 6px rgba(60, 40, 20, 0.04), inset 0 1px 0 rgba(255, 255, 255, 0.55);
+
+  --text-primary: #1F1A14;
+  --text-secondary: #5A4D3D;
+  --text-tertiary: #968A78;
+}
+
+/* ════════════════════════════════════════════════════════
+   INDIGO — craft-software aesthetic.
+   ════════════════════════════════════════════════════════ */
+[data-theme="indigo"] {
+  --radius: 8px;
+
+  --background: #FAFAF7;
+  --card: #FFFFFF;
+  --popover: #FFFFFF;
+  --muted: #F0F0F4;
+
+  --primary: #312E81;
+  --primary-foreground: #F5F5FA;
+
+  --secondary: #F0F0F4;
+  --secondary-foreground: #1A1A2E;
+
+  --accent: #F0F0F4;
+  --accent-foreground: #1A1A2E;
+
+  --foreground: #1A1A2E;
+  --card-foreground: #1A1A2E;
+  --popover-foreground: #1A1A2E;
+  --muted-foreground: #4C4C5C;
+
+  --destructive: #DC2626;
+
+  --border: #E0E0E8;
+  --input: #E0E0E8;
+  --ring: #312E81;
+
+  --chart-1: #312E81;
+  --chart-2: #0EA5E9;
+  --chart-3: #C2410C;
+  --chart-4: #8B5CF6;
+  --chart-5: #F59E0B;
+
+  --sidebar: #FFFFFF;
+  --sidebar-foreground: #5C5C70;
+  --sidebar-primary: #312E81;
+  --sidebar-primary-foreground: #F5F5FA;
+  --sidebar-accent: #312E81;
+  --sidebar-accent-foreground: #F5F5FA;
+  --sidebar-border: #ECECF2;
+  --sidebar-ring: #312E81;
+
+  --brand: #312E81;
+  --brand-hover: #1E1B5C;
+  --brand-muted: #EEEEF5;
+  --brand-text: #312E81;
+
+  --bg-hover: #F0F0F4;
+  --border-subtle: #ECECF2;
+
+  --shadow-sm: 0 1px 2px rgba(20, 20, 40, 0.04);
+  --shadow-md: 0 4px 12px rgba(20, 20, 40, 0.06);
+  --shadow-lg: 0 8px 30px rgba(20, 20, 40, 0.10);
+
+  --text-primary: #1A1A2E;
+  --text-secondary: #5C5C70;
+  --text-tertiary: #9090A0;
+}
+
+/* ════════════════════════════════════════════════════════
+   SAGE — muted forest, green-family lineage.
+   Status-success bumps brighter so it stays distinct.
+   ════════════════════════════════════════════════════════ */
+[data-theme="sage"] {
+  --radius: 8px;
+
+  --background: #F7F8F5;
+  --card: #FFFFFF;
+  --popover: #FFFFFF;
+  --muted: #ECEEE7;
+
+  --primary: #4D7C5C;
+  --primary-foreground: #F5F8F6;
+
+  --secondary: #ECEEE7;
+  --secondary-foreground: #1A1F1A;
+
+  --accent: #ECEEE7;
+  --accent-foreground: #1A1F1A;
+
+  --foreground: #1A1F1A;
+  --card-foreground: #1A1F1A;
+  --popover-foreground: #1A1F1A;
+  --muted-foreground: #4C584C;
+
+  --destructive: #DC2626;
+
+  --border: #DFE3D8;
+  --input: #DFE3D8;
+  --ring: #4D7C5C;
+
+  --chart-1: #4D7C5C;
+  --chart-2: #C2410C;
+  --chart-3: #312E81;
+  --chart-4: #CA8A04;
+  --chart-5: #8B5CF6;
+
+  --sidebar: #FFFFFF;
+  --sidebar-foreground: #5C685C;
+  --sidebar-primary: #4D7C5C;
+  --sidebar-primary-foreground: #F5F8F6;
+  --sidebar-accent: #4D7C5C;
+  --sidebar-accent-foreground: #F5F8F6;
+  --sidebar-border: #E5E8DF;
+  --sidebar-ring: #4D7C5C;
+
+  --brand: #4D7C5C;
+  --brand-hover: #2F5238;
+  --brand-muted: #ECF1EC;
+  --brand-text: #2F5238;
+
+  --bg-hover: #ECEEE7;
+  --border-subtle: #E5E8DF;
+
+  --shadow-sm: 0 1px 2px rgba(30, 50, 30, 0.04);
+  --shadow-md: 0 4px 12px rgba(30, 50, 30, 0.06);
+  --shadow-lg: 0 8px 30px rgba(30, 50, 30, 0.10);
+
+  --text-primary: #1A1F1A;
+  --text-secondary: #5C685C;
+  --text-tertiary: #909990;
+}
+
+/* Sage needs a brighter success to stay visible against its sage primary. */
+[data-theme="sage"] {
+  --status-success: #22C55E;
+}
+
+/* ════════════════════════════════════════════════════════
+   ESPRESSO — warm dark mode. Charcoal + amber.
+   Triggers Tailwind's `dark:` variant via the @custom-variant rule above.
+   ════════════════════════════════════════════════════════ */
+[data-theme="espresso"] {
+  --radius: 8px;
+
+  --background: #1A1714;
+  --card: #221E1A;
+  --popover: #221E1A;
+  --muted: #2A2520;
+
+  --primary: #E8853A;
+  --primary-foreground: #1A1714;
+
+  --secondary: #2A2520;
+  --secondary-foreground: #F5EFE4;
+
+  --accent: #2A2520;
+  --accent-foreground: #F5EFE4;
+
+  --foreground: #F5EFE4;
+  --card-foreground: #F5EFE4;
+  --popover-foreground: #F5EFE4;
+  --muted-foreground: rgba(245, 239, 228, 0.7);
+
+  --destructive: #F87171;
+
+  --border: rgba(245, 239, 228, 0.08);
+  --input: rgba(245, 239, 228, 0.12);
+  --ring: #E8853A;
+
+  --chart-1: #E8853A;
+  --chart-2: #84CC16;
+  --chart-3: #60A5FA;
+  --chart-4: #A78BFA;
+  --chart-5: #FACC15;
+
+  --sidebar: #221E1A;
+  --sidebar-foreground: rgba(245, 239, 228, 0.55);
+  --sidebar-primary: #E8853A;
+  --sidebar-primary-foreground: #1A1714;
+  --sidebar-accent: #E8853A;
+  --sidebar-accent-foreground: #1A1714;
+  --sidebar-border: rgba(245, 239, 228, 0.06);
+  --sidebar-ring: #E8853A;
+
+  --brand: #E8853A;
+  --brand-hover: #F4B97A;
+  --brand-muted: rgba(232, 133, 58, 0.12);
+  --brand-text: #F4B97A;
+
+  --bg-hover: #2A2520;
+  --border-subtle: rgba(245, 239, 228, 0.04);
+
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.4);
+  --shadow-lg: 0 8px 30px rgba(0, 0, 0, 0.5);
+
+  --text-primary: #F5EFE4;
+  --text-secondary: rgba(245, 239, 228, 0.65);
+  --text-tertiary: rgba(245, 239, 228, 0.35);
+
+  /* Status pops harder on dark */
   --status-success: #4ADE80;
   --status-success-bg: rgba(74, 222, 128, 0.1);
   --status-warning: #FACC15;
@@ -204,22 +349,69 @@
   --status-error-bg: rgba(248, 113, 113, 0.1);
   --status-info: #60A5FA;
   --status-info-bg: rgba(96, 165, 250, 0.1);
+}
 
-  --brand: #18FB6F;
-  --brand-hover: #2CFF7E;
-  --brand-muted: rgba(24, 251, 111, 0.1);
-  --brand-text: #4ADE80;
+/* ════════════════════════════════════════════════════════
+   MONO — neutral light. Monochrome, no warmth.
+   ════════════════════════════════════════════════════════ */
+[data-theme="mono"] {
+  --radius: 8px;
 
-  --bg-hover: #222224;
-  --border-subtle: rgba(255, 255, 255, 0.04);
+  --background: #FAFAFA;
+  --card: #FFFFFF;
+  --popover: #FFFFFF;
+  --muted: #F4F4F5;
 
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.2);
-  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.3);
-  --shadow-lg: 0 8px 30px rgba(0, 0, 0, 0.4);
+  --primary: #141414;
+  --primary-foreground: #FFFFFF;
 
-  --text-primary: #F5F5F7;
-  --text-secondary: rgba(245, 245, 247, 0.6);
-  --text-tertiary: rgba(245, 245, 247, 0.3);
+  --secondary: #F4F4F5;
+  --secondary-foreground: #141414;
+
+  --accent: #F4F4F5;
+  --accent-foreground: #141414;
+
+  --foreground: #141414;
+  --card-foreground: #141414;
+  --popover-foreground: #141414;
+  --muted-foreground: #525258;
+
+  --destructive: #DC2626;
+
+  --border: #E4E4E7;
+  --input: #E4E4E7;
+  --ring: #141414;
+
+  --chart-1: #141414;
+  --chart-2: #6B6B70;
+  --chart-3: #A1A1AA;
+  --chart-4: #D4D4D8;
+  --chart-5: #E4E4E7;
+
+  --sidebar: #FFFFFF;
+  --sidebar-foreground: #5F5F5F;
+  --sidebar-primary: #141414;
+  --sidebar-primary-foreground: #FFFFFF;
+  --sidebar-accent: #141414;
+  --sidebar-accent-foreground: #FFFFFF;
+  --sidebar-border: #F4F4F5;
+  --sidebar-ring: #141414;
+
+  --brand: #141414;
+  --brand-hover: #000000;
+  --brand-muted: #F0F0F1;
+  --brand-text: #141414;
+
+  --bg-hover: #F0F0F1;
+  --border-subtle: #F4F4F5;
+
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.04);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.06);
+  --shadow-lg: 0 8px 30px rgba(0, 0, 0, 0.10);
+
+  --text-primary: #141414;
+  --text-secondary: #5F5F5F;
+  --text-tertiary: #A1A1AA;
 }
 
 /* ════════════════════════════════════════════════════════
@@ -231,10 +423,95 @@
   }
   body {
     @apply bg-background text-foreground;
+    font-size: 15px;
+    line-height: 1.55;
+    font-feature-settings: "ss01", "cv11";
+    /* Theme-aware native form controls — every checkbox/radio/range/progress
+       on the page picks up the active --primary as its accent-color. */
+    accent-color: var(--primary);
   }
   html {
     @apply font-sans;
   }
+}
+
+/* ════════════════════════════════════════════════════════
+   TYPE SCALE — 2026 hierarchy: bold display, breathing body.
+   Use as className="text-display" / "text-title" / etc.
+   ════════════════════════════════════════════════════════ */
+.text-display {
+  font-family: var(--font-display);
+  font-size: 36px;
+  font-weight: 700;
+  letter-spacing: -0.035em;
+  line-height: 1.05;
+}
+.text-display-sm {
+  font-family: var(--font-display);
+  font-size: 28px;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  line-height: 1.1;
+}
+.text-title {
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+}
+.text-body {
+  font-size: 15px;
+  font-weight: 400;
+  line-height: 1.55;
+}
+.text-body-sm {
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 1.5;
+}
+.text-label {
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.text-caption {
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.4;
+}
+.num-large {
+  font-size: 28px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+}
+.num-display {
+  font-family: var(--font-display);
+  font-size: 40px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.04em;
+  line-height: 1;
+}
+
+/* Italic personality kicker — Jost italic at body size for subtitle moments */
+.text-kicker {
+  font-family: var(--font-display);
+  font-style: italic;
+  font-weight: 400;
+  letter-spacing: 0.005em;
+}
+
+/* Theme crossfade — smooths the data-theme attribute swap */
+:root,
+html[data-theme] {
+  transition: background-color 220ms ease, color 220ms ease;
+}
+* {
+  transition-property: background-color, border-color, color, fill, stroke, box-shadow;
+  transition-duration: 180ms;
+  transition-timing-function: cubic-bezier(0.2, 0, 0, 1);
 }
 
 /* Tabular nums for all data display */
@@ -247,6 +524,80 @@
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
 ::-webkit-scrollbar-thumb:hover { background: var(--muted-foreground); }
+
+/* ════════════════════════════════════════════════════════
+   FORM CONTROLS — Clay-styled native inputs.
+   Targets all <input type="checkbox"> / [type="radio"] across the app
+   without touching component code. Theme-aware via --primary.
+   Wrapped in @layer base so Tailwind v4 / Turbopack don't strip
+   the unprefixed selectors as dead code.
+   ════════════════════════════════════════════════════════ */
+@layer base {
+  input[type="checkbox"]:not([data-native]) {
+    appearance: none;
+    -webkit-appearance: none;
+    width: 16px;
+    height: 16px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--card);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.55), 0 1px 1px rgba(0, 0, 0, 0.03);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    vertical-align: middle;
+    position: relative;
+    transition: background-color 140ms ease, border-color 140ms ease, box-shadow 140ms ease;
+    flex-shrink: 0;
+  }
+  input[type="checkbox"]:not([data-native]):hover:not(:disabled) {
+    border-color: var(--muted-foreground);
+  }
+  input[type="checkbox"]:not([data-native]):checked {
+    background: var(--primary);
+    border-color: var(--primary);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.2), 0 1px 2px rgba(0, 0, 0, 0.08);
+  }
+  input[type="checkbox"]:not([data-native]):checked::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none'><path d='M4 8.5l2.5 2.5L12 5.5' stroke='%23FFF7F0' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'/></svg>");
+    background-size: 100% 100%;
+    background-repeat: no-repeat;
+  }
+  input[type="checkbox"]:not([data-native]):focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 1px;
+  }
+  input[type="checkbox"]:not([data-native]):disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  input[type="radio"]:not([data-native]) {
+    appearance: none;
+    -webkit-appearance: none;
+    width: 16px;
+    height: 16px;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    background: var(--card);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.55);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    vertical-align: middle;
+    transition: background-color 140ms ease, border-color 140ms ease;
+  }
+  input[type="radio"]:not([data-native]):checked {
+    border-color: var(--primary);
+    background: var(--primary);
+    box-shadow: inset 0 0 0 3px var(--card);
+  }
+}
 
 /* Status dot animation */
 @keyframes pulse-dot {

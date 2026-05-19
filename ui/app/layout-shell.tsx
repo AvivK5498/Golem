@@ -3,6 +3,7 @@
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect } from "react";
 import { AppSidebar } from "@/components/app-sidebar";
+import { StatusBar } from "@/components/status-bar";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { useFetch } from "@/lib/use-api";
 
@@ -35,11 +36,14 @@ export function LayoutShell({ children }: { children: React.ReactNode }) {
     <TooltipProvider delay={100}>
       <div className="flex h-screen overflow-hidden">
         <AppSidebar />
-        <main className="flex-1 overflow-auto px-6 py-8">
-          <div className="mx-auto max-w-6xl">
-            {children}
-          </div>
-        </main>
+        <div className="flex flex-1 flex-col min-w-0">
+          <main className="flex-1 overflow-auto px-6 py-8">
+            <div className="mx-auto max-w-6xl">
+              {children}
+            </div>
+          </main>
+          <StatusBar />
+        </div>
       </div>
     </TooltipProvider>
   );

@@ -1,12 +1,10 @@
 "use client";
 
+import { useMemo } from "react";
 import { useFetch } from "@/lib/use-api";
 import { POLL_INTERVAL_MS } from "@/lib/constants";
-import { timeAgo, compactNumber, todayMidnight, fullDateTime } from "@/lib/format";
-import { AnimatedNumber } from "@/components/motion-primitives/animated-number";
-import { AnimatedGroup } from "@/components/motion-primitives/animated-group";
+import { timeAgo, todayMidnight, fullDateTime, compactNumber } from "@/lib/format";
 import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/empty-state";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -16,90 +14,75 @@ import {
   ArrowRight,
   Bot,
   Clock,
-  Heart,
-  MessageSquare,
   Coins,
   AlertTriangle,
   Wifi,
   WifiOff,
-  Webhook,
+  CalendarClock,
 } from "lucide-react";
-import type { FeedEntry, FeedCounts, FeedTokens, PlatformAgent } from "@/lib/types";
+import type { FeedEntry, FeedCounts, FeedTokens, PlatformAgent, CronJob } from "@/lib/types";
 
 const since = todayMidnight();
 
-// ── Source icon mapping ────────────────────────────────
-const SOURCE_ICON: Record<string, typeof Activity> = {
-  direct: MessageSquare,
-  cron: Clock,
-  heartbeat: Heart,
-  webhook: Webhook,
-};
-
-const SOURCE_COLOR: Record<string, string> = {
-  direct: "text-[var(--status-info)] bg-[var(--status-info-bg)]",
-  cron: "text-[var(--chart-4)] bg-[var(--chart-4)]/10",
-  heartbeat: "text-[var(--status-warning)] bg-[var(--status-warning-bg)]",
-  webhook: "text-[var(--brand-text)] bg-[var(--brand-muted)]",
-};
-
-const STATUS_DOT: Record<string, string> = {
-  delivered: "bg-[var(--status-success)]",
-  suppressed: "bg-[var(--text-tertiary)]",
-  error: "bg-[var(--status-error)]",
-};
-
-// ── Metric Card ────────────────────────────────────────
-function MetricCard({
-  label,
-  value,
-  icon: Icon,
-  loading,
-  accent,
-}: {
-  label: string;
-  value: number;
-  icon: typeof Activity;
-  loading: boolean;
-  accent?: boolean;
-}) {
-  return (
-    <Card className="relative overflow-hidden">
-      <CardContent className="p-4">
-        <div className="flex items-center justify-between">
-          <div className="space-y-1">
-            <p className="text-[13px] font-medium text-muted-foreground">{label}</p>
-            {loading ? (
-              <Skeleton className="h-8 w-20" />
-            ) : (
-              <div className={`text-[28px] font-semibold tracking-tight font-mono ${accent ? "text-[var(--brand-text)]" : "text-foreground"}`}>
-                <AnimatedNumber value={value} springOptions={{ bounce: 0, duration: 800 }} />
-              </div>
-            )}
-          </div>
-          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-muted">
-            <Icon size={20} className="text-muted-foreground" />
-          </div>
-        </div>
-      </CardContent>
-    </Card>
-  );
+interface AgentSignals {
+  lastActivityTs: number | null;
+  conversationsToday: number;
+  tokensToday: number;
+  nextRunAt: number | null;
+  nextRunLabel: string | null;
 }
 
-// ── Agent Status Card ──────────────────────────────────
-function AgentCard({ agent }: { agent: PlatformAgent }) {
+function deriveSignals(
+  agentId: string,
+  feed: FeedEntry[],
+  crons: CronJob[],
+): AgentSignals {
+  const entries = feed.filter((e) => e.agent_id === agentId);
+  const lastActivityTs = entries.length > 0
+    ? Math.max(...entries.map((e) => e.timestamp))
+    : null;
+  const tokensToday = entries.reduce(
+    (sum, e) => sum + (e.tokens_in ?? 0) + (e.tokens_out ?? 0),
+    0,
+  );
+  // Conversations = distinct direct-source entries
+  const conversationsToday = entries.filter((e) => e.source === "direct").length;
+
+  const upcomingCrons = crons
+    .filter((c) => c.agent_id === agentId && !c.paused && c.next_run_at != null)
+    .sort((a, b) => (a.next_run_at! - b.next_run_at!));
+  const nextCron = upcomingCrons[0] ?? null;
+
+  return {
+    lastActivityTs,
+    conversationsToday,
+    tokensToday,
+    nextRunAt: nextCron?.next_run_at ?? null,
+    nextRunLabel: nextCron?.name ?? null,
+  };
+}
+
+function AgentCard({
+  agent,
+  signals,
+}: {
+  agent: PlatformAgent;
+  signals: AgentSignals;
+}) {
   const connected = agent.connected && agent.enabled;
+
   return (
     <Link href={`/agents/${agent.id}`}>
-      <Card className="hover:shadow-md transition-shadow cursor-pointer group">
-        <CardContent className="p-4">
-          <div className="flex items-start justify-between mb-3">
-            <div className="flex items-center gap-2.5">
-              <div className="flex h-8 w-8 items-center justify-center rounded-md bg-[var(--brand-muted)] text-[var(--brand-text)] text-sm font-bold shrink-0">
+      <Card className="hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 cursor-pointer group h-full">
+        <CardContent className="p-5 flex flex-col gap-3 h-full">
+          {/* Header — avatar + name + status */}
+          <div className="flex items-start justify-between gap-2">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <div className="flex h-9 w-9 items-center justify-center rounded-md bg-[var(--brand-muted)] text-[var(--brand-text)] text-sm font-bold shrink-0">
                 {agent.name.charAt(0).toUpperCase()}
               </div>
-              <div>
-                <p className="text-sm font-semibold text-foreground group-hover:text-[var(--brand-text)] transition-colors">
+              <div className="min-w-0">
+                <p className="text-sm font-semibold text-foreground group-hover:text-[var(--brand-text)] transition-colors truncate">
                   {agent.name}
                 </p>
                 <p className="text-xs text-muted-foreground line-clamp-1">
@@ -108,8 +91,16 @@ function AgentCard({ agent }: { agent: PlatformAgent }) {
               </div>
             </div>
             <Tooltip>
-              <TooltipTrigger className="flex items-center gap-1.5">
-                <span className={`h-2 w-2 rounded-full ${connected ? "bg-[var(--status-success)] status-dot-pulse" : agent.warnings?.length ? "bg-[var(--status-warning)]" : "bg-[var(--text-tertiary)]"}`} />
+              <TooltipTrigger className="flex items-center gap-1 shrink-0">
+                <span
+                  className={`h-2 w-2 rounded-full ${
+                    connected
+                      ? "bg-[var(--status-success)] status-dot-pulse"
+                      : agent.warnings?.length
+                        ? "bg-[var(--status-warning)]"
+                        : "bg-[var(--text-tertiary)]"
+                  }`}
+                />
                 {connected ? (
                   <Wifi size={12} className="text-[var(--status-success)]" />
                 ) : agent.warnings?.length ? (
@@ -123,10 +114,64 @@ function AgentCard({ agent }: { agent: PlatformAgent }) {
               </TooltipContent>
             </Tooltip>
           </div>
-          <div className="flex items-center gap-3 text-xs text-muted-foreground">
-            <span className="font-mono text-[11px]">{agent.model.split("/").pop()}</span>
-            <span className="font-mono tabular-nums">{agent.toolCount} tools</span>
-            <span className="font-mono tabular-nums">{agent.cronCount} schedules</span>
+
+          {/* Signals row */}
+          <div className="flex flex-col gap-1.5 text-xs text-muted-foreground mt-auto">
+            {/* Last activity */}
+            <div className="flex items-center gap-1.5">
+              <Activity size={11} className="shrink-0 text-[var(--text-tertiary)]" />
+              {signals.lastActivityTs != null ? (
+                <Tooltip>
+                  <TooltipTrigger className="text-left">
+                    <span>
+                      {signals.conversationsToday > 0
+                        ? `${signals.conversationsToday} conversation${signals.conversationsToday === 1 ? "" : "s"} today`
+                        : `last ran ${timeAgo(signals.lastActivityTs)}`}
+                    </span>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    Last activity {fullDateTime(signals.lastActivityTs)}
+                  </TooltipContent>
+                </Tooltip>
+              ) : (
+                <span className="text-[var(--text-tertiary)]">no activity today</span>
+              )}
+            </div>
+
+            {/* Next scheduled */}
+            <div className="flex items-center gap-1.5">
+              <CalendarClock size={11} className="shrink-0 text-[var(--text-tertiary)]" />
+              {signals.nextRunAt != null ? (
+                <Tooltip>
+                  <TooltipTrigger className="text-left truncate">
+                    <span className="truncate">
+                      {signals.nextRunLabel ?? "next run"}{" "}
+                      <span className="text-[var(--text-tertiary)]">
+                        · {timeAgo(signals.nextRunAt)}
+                      </span>
+                    </span>
+                  </TooltipTrigger>
+                  <TooltipContent>{fullDateTime(signals.nextRunAt)}</TooltipContent>
+                </Tooltip>
+              ) : (
+                <span className="text-[var(--text-tertiary)]">nothing scheduled</span>
+              )}
+            </div>
+
+            {/* Today's spend */}
+            <div className="flex items-center gap-1.5">
+              <Coins size={11} className="shrink-0 text-[var(--text-tertiary)]" />
+              {signals.tokensToday > 0 ? (
+                <span>
+                  <span className="font-semibold text-foreground tabular-nums">
+                    {compactNumber(signals.tokensToday)}
+                  </span>{" "}
+                  tokens today
+                </span>
+              ) : (
+                <span className="text-[var(--text-tertiary)]">no spend today</span>
+              )}
+            </div>
           </div>
         </CardContent>
       </Card>
@@ -134,12 +179,42 @@ function AgentCard({ agent }: { agent: PlatformAgent }) {
   );
 }
 
-// ── Compact Activity Row ───────────────────────────────
+function AgentCardSkeleton() {
+  return (
+    <Card>
+      <CardContent className="p-4 flex flex-col gap-3">
+        <div className="flex items-start gap-2.5">
+          <Skeleton className="h-9 w-9 rounded-md" />
+          <div className="space-y-1.5 flex-1">
+            <Skeleton className="h-4 w-24" />
+            <Skeleton className="h-3 w-full" />
+          </div>
+        </div>
+        <div className="space-y-2">
+          <Skeleton className="h-3 w-32" />
+          <Skeleton className="h-3 w-40" />
+          <Skeleton className="h-3 w-28" />
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+const SOURCE_COLOR: Record<string, string> = {
+  direct: "text-[var(--status-info)] bg-[var(--status-info-bg)]",
+  cron: "text-[var(--chart-4)] bg-[var(--chart-4)]/10",
+  heartbeat: "text-[var(--status-warning)] bg-[var(--status-warning-bg)]",
+  webhook: "text-[var(--brand-text)] bg-[var(--brand-muted)]",
+};
+const STATUS_DOT: Record<string, string> = {
+  delivered: "bg-[var(--status-success)]",
+  suppressed: "bg-[var(--text-tertiary)]",
+  error: "bg-[var(--status-error)]",
+};
+
 function ActivityRow({ entry }: { entry: FeedEntry }) {
-  const SourceIcon = SOURCE_ICON[entry.source] || Activity;
   const sourceColor = SOURCE_COLOR[entry.source] || "text-muted-foreground bg-muted";
   const dotColor = STATUS_DOT[entry.status] || STATUS_DOT.delivered;
-
   return (
     <tr className="border-b border-[var(--border-subtle)] hover:bg-[var(--bg-hover)] transition-colors text-sm">
       <td className="py-3 px-3">
@@ -157,7 +232,6 @@ function ActivityRow({ entry }: { entry: FeedEntry }) {
       </td>
       <td className="py-3 px-3">
         <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium ${sourceColor}`}>
-          <SourceIcon size={11} />
           {entry.source}
         </span>
       </td>
@@ -174,44 +248,6 @@ function ActivityRow({ entry }: { entry: FeedEntry }) {
   );
 }
 
-// ── Skeleton Loaders ───────────────────────────────────
-function MetricSkeleton() {
-  return (
-    <Card>
-      <CardContent className="p-4">
-        <div className="flex items-center justify-between">
-          <div className="space-y-2">
-            <Skeleton className="h-4 w-20" />
-            <Skeleton className="h-8 w-16" />
-          </div>
-          <Skeleton className="h-10 w-10 rounded-lg" />
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
-
-function AgentCardSkeleton() {
-  return (
-    <Card>
-      <CardContent className="p-4">
-        <div className="flex items-start gap-2.5 mb-3">
-          <Skeleton className="h-8 w-8 rounded-md" />
-          <div className="space-y-1.5 flex-1">
-            <Skeleton className="h-4 w-24" />
-            <Skeleton className="h-3 w-full" />
-          </div>
-        </div>
-        <div className="flex gap-3">
-          <Skeleton className="h-3 w-20" />
-          <Skeleton className="h-3 w-12" />
-          <Skeleton className="h-3 w-12" />
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
-
 function ActivityRowSkeleton() {
   return (
     <tr className="border-b border-[var(--border-subtle)]">
@@ -224,59 +260,70 @@ function ActivityRowSkeleton() {
   );
 }
 
-// ── Home Page ──────────────────────────────────────────
 export default function HomePage() {
+  // Bump the feed limit so we can derive per-agent signals client-side.
   const { data: feedData, loading: feedLoading } = useFetch<{
     entries: FeedEntry[];
     counts: FeedCounts;
     tokens: FeedTokens;
-  }>(`/api/feed?agent_id=all&limit=10&since=${since}`, POLL_INTERVAL_MS);
+  }>(`/api/feed?agent_id=all&limit=500&since=${since}`, POLL_INTERVAL_MS);
 
   const { data: agentData, loading: agentsLoading } = useFetch<{
     agents: PlatformAgent[];
   }>("/api/platform/agents", POLL_INTERVAL_MS);
 
-  const counts = feedData?.counts ?? { total: 0, delivered: 0, suppressed: 0, error: 0 };
-  const tokens = feedData?.tokens ?? { totalIn: 0, totalOut: 0, count: 0 };
+  const { data: cronData } = useFetch<{ crons: CronJob[] }>("/api/crons", POLL_INTERVAL_MS);
+
   const entries = feedData?.entries ?? [];
   const agents = agentData?.agents ?? [];
-  const connectedCount = agents.filter((a) => a.connected && a.enabled).length;
+  const crons = cronData?.crons ?? [];
 
-  const loading = feedLoading && !feedData;
+  const signalsByAgent = useMemo(() => {
+    const map: Record<string, AgentSignals> = {};
+    for (const a of agents) {
+      map[a.id] = deriveSignals(a.id, entries, crons);
+    }
+    return map;
+  }, [agents, entries, crons]);
+
+  // Top-10 recent activity for the table at the bottom
+  const recentEntries = entries.slice(0, 10);
+
+  const feedLoadingFirst = feedLoading && !feedData;
   const agentsLoadingFirst = agentsLoading && !agentData;
 
   return (
     <div className="space-y-8">
-      {/* Page title */}
+      {/* Page title — display weight, with the count as a numeric anchor */}
       <div>
-        <h1 className="text-[28px] font-semibold tracking-tight">Home</h1>
-        <p className="text-sm text-muted-foreground mt-1">Platform overview for today</p>
-      </div>
-
-      {/* Metric cards */}
-      <div className="grid grid-cols-4 gap-4">
-        {loading ? (
-          <>
-            <MetricSkeleton />
-            <MetricSkeleton />
-            <MetricSkeleton />
-            <MetricSkeleton />
-          </>
+        <h1 className="text-display">Home</h1>
+        {agents.length > 0 ? (
+          <p className="mt-2 flex items-baseline gap-2">
+            <span className="num-large text-foreground">
+              {agents.filter((a) => a.connected && a.enabled).length}
+            </span>
+            <span className="text-body text-muted-foreground">
+              of {agents.length} agents online
+            </span>
+            <span className="text-kicker text-muted-foreground/80 ml-1">
+              · all systems normal
+            </span>
+          </p>
         ) : (
-          <>
-            <MetricCard label="Messages today" value={counts.total} icon={MessageSquare} loading={false} />
-            <MetricCard label="Tokens today" value={tokens.totalIn + tokens.totalOut} icon={Coins} loading={false} />
-            <MetricCard label="Errors today" value={counts.error} icon={AlertTriangle} loading={false} accent={counts.error > 0} />
-            <MetricCard label="Agents online" value={connectedCount} icon={Bot} loading={false} accent />
-          </>
+          <p className="text-body text-muted-foreground mt-2">
+            Your fleet is empty
+          </p>
         )}
       </div>
 
-      {/* Agent cards */}
+      {/* Agent cards — the primary entry point */}
       <div>
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-xl font-semibold">Agents</h2>
-          <Link href="/agents" className="text-[13px] font-medium text-[var(--brand-text)] hover:underline inline-flex items-center gap-1">
+          <h2 className="text-title">Agents</h2>
+          <Link
+            href="/agents"
+            className="text-[13px] font-medium text-[var(--brand-text)] hover:underline inline-flex items-center gap-1"
+          >
             View all <ArrowRight size={13} />
           </Link>
         </div>
@@ -296,7 +343,17 @@ export default function HomePage() {
         ) : (
           <div className="grid grid-cols-3 gap-4">
             {agents.map((agent) => (
-              <AgentCard key={agent.id} agent={agent} />
+              <AgentCard
+                key={agent.id}
+                agent={agent}
+                signals={signalsByAgent[agent.id] ?? {
+                  lastActivityTs: null,
+                  conversationsToday: 0,
+                  tokensToday: 0,
+                  nextRunAt: null,
+                  nextRunLabel: null,
+                }}
+              />
             ))}
           </div>
         )}
@@ -305,8 +362,11 @@ export default function HomePage() {
       {/* Recent activity */}
       <div>
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-xl font-semibold">Recent Activity</h2>
-          <Link href="/feed" className="text-[13px] font-medium text-[var(--brand-text)] hover:underline inline-flex items-center gap-1">
+          <h2 className="text-title">Recent Activity</h2>
+          <Link
+            href="/feed"
+            className="text-[13px] font-medium text-[var(--brand-text)] hover:underline inline-flex items-center gap-1"
+          >
             View all <ArrowRight size={13} />
           </Link>
         </div>
@@ -323,9 +383,9 @@ export default function HomePage() {
                 </tr>
               </thead>
               <tbody>
-                {loading ? (
+                {feedLoadingFirst ? (
                   Array.from({ length: 5 }).map((_, i) => <ActivityRowSkeleton key={i} />)
-                ) : entries.length === 0 ? (
+                ) : recentEntries.length === 0 ? (
                   <tr>
                     <td colSpan={5}>
                       <EmptyState
@@ -336,7 +396,7 @@ export default function HomePage() {
                     </td>
                   </tr>
                 ) : (
-                  entries.map((entry) => <ActivityRow key={entry.id} entry={entry} />)
+                  recentEntries.map((entry) => <ActivityRow key={entry.id} entry={entry} />)
                 )}
               </tbody>
             </table>

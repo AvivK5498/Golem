@@ -5,7 +5,6 @@ import { usePathname } from "next/navigation";
 import {
   Activity,
   Bot,
-  ChevronDown,
   Clock,
   Github,
   LayoutDashboard,
@@ -13,47 +12,28 @@ import {
   Puzzle,
   Settings,
 } from "lucide-react";
-import { useState } from "react";
 import { SystemMenu } from "@/components/system-menu";
 import { cn } from "@/lib/utils";
 
 type NavItem = { href: string; label: string; icon: typeof LayoutDashboard };
-type NavSection = { id: string; label: string | null; items: NavItem[] };
 
-const SECTIONS: NavSection[] = [
-  {
-    id: "overview",
-    label: null, // top-level, no header
-    items: [{ href: "/", label: "Home", icon: LayoutDashboard }],
-  },
-  {
-    id: "build",
-    label: "Build",
-    items: [
-      { href: "/agents", label: "Agents", icon: Bot },
-      { href: "/skills", label: "Skills", icon: Puzzle },
-      { href: "/providers", label: "Providers", icon: Plug },
-    ],
-  },
-  {
-    id: "operations",
-    label: "Operations",
-    items: [
-      { href: "/schedules", label: "Schedules", icon: Clock },
-      { href: "/feed", label: "Feed", icon: Activity },
-    ],
-  },
+// Flat 6-item navigation — Build/Operations group headers dropped per
+// the posture decision: with six total items, the headers added clutter
+// without orienting.
+const NAV_ITEMS: NavItem[] = [
+  { href: "/", label: "Home", icon: LayoutDashboard },
+  { href: "/agents", label: "Agents", icon: Bot },
+  { href: "/skills", label: "Skills", icon: Puzzle },
+  { href: "/providers", label: "Providers", icon: Plug },
+  { href: "/schedules", label: "Schedules", icon: Clock },
+  { href: "/feed", label: "Feed", icon: Activity },
 ];
 
 export function AppSidebar() {
   const pathname = usePathname();
-  const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
 
   const isActive = (href: string) =>
     href === "/" ? pathname === "/" : pathname.startsWith(href);
-
-  const toggleSection = (id: string) =>
-    setCollapsed((prev) => ({ ...prev, [id]: !prev[id] }));
 
   return (
     <aside className="flex h-screen w-[220px] shrink-0 flex-col border-r border-border/50 bg-card">
@@ -68,48 +48,24 @@ export function AppSidebar() {
         <SystemMenu />
       </div>
 
-      {/* Navigation */}
-      <nav className="flex-1 px-3 space-y-3 overflow-y-auto">
-        {SECTIONS.map((section) => {
-          const isCollapsed = collapsed[section.id];
+      {/* Navigation — flat list, no group headers */}
+      <nav className="flex-1 px-3 space-y-0.5 overflow-y-auto">
+        {NAV_ITEMS.map(({ href, label, icon: Icon }) => {
+          const active = isActive(href);
           return (
-            <div key={section.id} className="space-y-0.5">
-              {section.label && (
-                <button
-                  type="button"
-                  onClick={() => toggleSection(section.id)}
-                  className="flex w-full items-center justify-between px-3 py-1.5 text-[12px] font-medium text-muted-foreground hover:text-foreground transition-colors"
-                >
-                  <span>{section.label}</span>
-                  <ChevronDown
-                    size={13}
-                    className={cn(
-                      "transition-transform opacity-70",
-                      isCollapsed && "-rotate-90"
-                    )}
-                  />
-                </button>
+            <Link
+              key={href}
+              href={href}
+              className={cn(
+                "flex items-center gap-3 rounded-md px-3 py-2 text-[14px] font-normal transition-colors",
+                active
+                  ? "bg-[var(--brand)]/10 text-[var(--brand-text)] font-medium"
+                  : "text-foreground/85 hover:text-foreground hover:bg-accent"
               )}
-              {!isCollapsed &&
-                section.items.map(({ href, label, icon: Icon }) => {
-                  const active = isActive(href);
-                  return (
-                    <Link
-                      key={href}
-                      href={href}
-                      className={cn(
-                        "flex items-center gap-3 rounded-md px-3 py-2 text-[14px] font-normal transition-colors",
-                        active
-                          ? "bg-[var(--brand)]/10 text-[var(--brand-text)] font-medium"
-                          : "text-foreground/85 hover:text-foreground hover:bg-accent"
-                      )}
-                    >
-                      <Icon size={18} strokeWidth={active ? 2 : 1.6} />
-                      {label}
-                    </Link>
-                  );
-                })}
-            </div>
+            >
+              <Icon size={18} strokeWidth={active ? 2 : 1.6} />
+              {label}
+            </Link>
           );
         })}
       </nav>
