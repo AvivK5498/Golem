@@ -70,7 +70,7 @@ export function buildAgentMounts(opts: {
   // missing-on-disk entries with a warning — the agent still starts.
   const seen = new Set<string>();
   for (const m of configuredMounts) {
-    if (!/^[a-z0-9-]+$/.test(m.name) || m.name === "workspace" || m.name === "ext-skills") {
+    if (!/^[a-z0-9_-]+$/.test(m.name) || m.name === "workspace" || m.name === "ext-skills") {
       console.warn(`[agent-mounts] skipping mount with invalid name "${m.name}"`);
       continue;
     }
