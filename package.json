@@ -41,7 +41,7 @@
   "scripts": {
     "dev": "concurrently -n platform,ui -c blue,green \"node bin/golem.js\" \"npm run dev --workspace=ui\"",
     "dev:watch": "concurrently -n platform,ui -c blue,green \"node bin/golem.js\" \"npm run dev --workspace=ui\"",
-    "start": "concurrently -n platform,ui -c blue,green \"node bin/golem.js\" \"npm run dev --workspace=ui\"",
+    "start": "concurrently -n platform,ui -c blue,green --restart-tries -1 --restart-after 2000 \"node bin/golem.js\" \"npm run dev --workspace=ui\"",
     "test:agent": "npx tsx src/test-harness.ts",
     "test": "bun test",
     "lint": "eslint src/",
