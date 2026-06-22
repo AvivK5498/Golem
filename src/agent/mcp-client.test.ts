@@ -9,7 +9,11 @@ import { applySchemaOverrides, SCHEMA_OVERRIDES } from "./mcp-client.js";
 // behavior — if the mutation stops taking effect, or an override silently fails
 // to match a renamed tool, the bug returns invisibly in prod.
 
-const fakeTool = () => ({ inputSchema: { $schema: "https://json-schema.org/draft/2020-12/schema" } });
+// inputSchema typed as `unknown` to mirror the real Tool (the override replaces
+// a JSON-schema object with a Zod schema, so the field must accept both).
+const fakeTool = (): { inputSchema: unknown } => ({
+  inputSchema: { $schema: "https://json-schema.org/draft/2020-12/schema" },
+});
 
 describe("applySchemaOverrides", () => {
   test("mutates the matching tool instance in place (same reference)", () => {
