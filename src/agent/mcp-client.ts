@@ -18,7 +18,7 @@ import { logger } from "../utils/external-logger.js";
  * sidesteps the broken validation — the MCP server still validates server-side.
  * Keyed by the registered tool id (serverName_toolName).
  */
-const SCHEMA_OVERRIDES: Record<string, z.ZodTypeAny> = {
+export const SCHEMA_OVERRIDES: Record<string, z.ZodTypeAny> = {
   firecrawl_firecrawl_scrape: z.object({
     url: z.string().describe("The URL to scrape"),
     formats: z.array(z.string()).optional().describe('Output formats, e.g. ["markdown"]'),
@@ -29,6 +29,38 @@ const SCHEMA_OVERRIDES: Record<string, z.ZodTypeAny> = {
     limit: z.number().optional().describe("Max results to return"),
   }),
 };
+
+/**
+ * Apply {@link SCHEMA_OVERRIDES} to a loaded tool map, mutating each matching
+ * Tool instance's `inputSchema` in place. In-place is required: `Tool.execute`
+ * validates against `this.inputSchema` at call time and is an arrow function
+ * lexically bound to the instance, so a spread copy would never take effect.
+ *
+ * If an override's server is loaded but the specific tool id is absent (e.g. the
+ * server renamed it, or the `serverName_toolName` join changed), the override
+ * silently no-ops and calls regress to draft-2020-12 validation failures — so we
+ * warn loudly in that case. Returns the ids that were actually applied.
+ */
+export function applySchemaOverrides(
+  tools: Record<string, { inputSchema?: unknown }>,
+  overrides: Record<string, z.ZodTypeAny> = SCHEMA_OVERRIDES,
+  warn: (msg: string) => void = (m) => console.warn(m),
+): string[] {
+  const applied: string[] = [];
+  for (const [id, schema] of Object.entries(overrides)) {
+    if (id in tools) {
+      tools[id].inputSchema = schema;
+      applied.push(id);
+      continue;
+    }
+    const serverName = id.slice(0, id.indexOf("_"));
+    const serverLoaded = Object.keys(tools).some((t) => t.startsWith(`${serverName}_`));
+    if (serverLoaded) {
+      warn(`[mcp] schema override for "${id}" not applied — no tool with that id loaded (renamed?). Calls may fail draft-2020-12 validation.`);
+    }
+  }
+  return applied;
+}
 
 let mcpClient: MCPClient | null = null;
 let mcpTools: Record<string, Tool> = {};
@@ -76,6 +108,12 @@ export async function initMCPClient(
         Object.entries(servers).map(([name, cfg]) => {
           // HTTP server (url-based)
           if (cfg.url) {
+            const resolvedUrl = expandEnvVars(cfg.url);
+            if (!resolvedUrl) {
+              // expandEnvVars yields "" for an unset var, which would throw an
+              // opaque "Invalid URL" — point at the missing var instead.
+              throw new Error(`[mcp] server "${name}" has an empty url; is its env var set? (template: ${cfg.url})`);
+            }
             const headers = cfg.headers
               ? Object.fromEntries(
                   Object.entries(cfg.headers).map(([k, v]) => [k, expandEnvVars(v)])
@@ -84,7 +122,7 @@ export async function initMCPClient(
             return [
               name,
               {
-                url: new URL(expandEnvVars(cfg.url)),
+                url: new URL(resolvedUrl),
                 requestInit: headers ? { headers } : undefined,
               },
             ];
@@ -150,18 +188,13 @@ export async function initMCPClient(
       console.log(`[mcp] filtered ${Object.keys(allTools).length} → ${Object.keys(rawTools).length} tool(s) via whitelist`);
     }
 
+    // Replace broken (draft-2020-12) input schemas with clean Zod ones.
+    applySchemaOverrides(rawTools as Record<string, { inputSchema?: unknown }>);
+
     // Wrap MCP tools to cap result size (prevent context overflow)
     const MAX_RESULT_CHARS = 30_000;
     mcpTools = Object.fromEntries(
       Object.entries(rawTools).map(([name, tool]) => {
-        // Replace a broken (draft-2020-12) input schema with a clean Zod one.
-        // Mutate the Tool instance in place: its execute() validates against
-        // `this.inputSchema` at call time and is lexically bound to this
-        // instance, so a spread copy would never take effect.
-        if (SCHEMA_OVERRIDES[name]) {
-          (tool as { inputSchema?: unknown }).inputSchema = SCHEMA_OVERRIDES[name];
-        }
-
         if (!tool.execute) {
           return [name, tool];
         }
