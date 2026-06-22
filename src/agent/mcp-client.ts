@@ -4,10 +4,31 @@
  */
 import { MCPClient } from "@mastra/mcp";
 import type { Tool } from "@mastra/core/tools";
+import { z } from "zod";
 import { expandEnvVars } from "../config.js";
 import fs from "node:fs";
 import yaml from "yaml";
 import { logger } from "../utils/external-logger.js";
+
+/**
+ * Clean input schemas for MCP tools whose server-provided JSON Schema declares
+ * draft 2020-12 ($schema: ".../2020-12/schema"). Mastra's tool-input validator
+ * can't resolve that meta-schema and rejects every call locally ("no schema with
+ * key or ref ...2020-12/schema"). Overriding inputSchema with a plain Zod schema
+ * sidesteps the broken validation — the MCP server still validates server-side.
+ * Keyed by the registered tool id (serverName_toolName).
+ */
+const SCHEMA_OVERRIDES: Record<string, z.ZodTypeAny> = {
+  firecrawl_firecrawl_scrape: z.object({
+    url: z.string().describe("The URL to scrape"),
+    formats: z.array(z.string()).optional().describe('Output formats, e.g. ["markdown"]'),
+    onlyMainContent: z.boolean().optional().describe("Strip nav/footer boilerplate (default true)"),
+  }),
+  firecrawl_firecrawl_search: z.object({
+    query: z.string().describe("The search query"),
+    limit: z.number().optional().describe("Max results to return"),
+  }),
+};
 
 let mcpClient: MCPClient | null = null;
 let mcpTools: Record<string, Tool> = {};
@@ -63,7 +84,7 @@ export async function initMCPClient(
             return [
               name,
               {
-                url: new URL(cfg.url),
+                url: new URL(expandEnvVars(cfg.url)),
                 requestInit: headers ? { headers } : undefined,
               },
             ];
@@ -133,6 +154,14 @@ export async function initMCPClient(
     const MAX_RESULT_CHARS = 30_000;
     mcpTools = Object.fromEntries(
       Object.entries(rawTools).map(([name, tool]) => {
+        // Replace a broken (draft-2020-12) input schema with a clean Zod one.
+        // Mutate the Tool instance in place: its execute() validates against
+        // `this.inputSchema` at call time and is lexically bound to this
+        // instance, so a spread copy would never take effect.
+        if (SCHEMA_OVERRIDES[name]) {
+          (tool as { inputSchema?: unknown }).inputSchema = SCHEMA_OVERRIDES[name];
+        }
+
         if (!tool.execute) {
           return [name, tool];
         }

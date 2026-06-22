@@ -4,3 +4,6 @@ servers:
        args: ["-y", "@brave/brave-search-mcp-server"]
        env:
          BRAVE_API_KEY: ${BRAVE_API_KEY}
+    firecrawl:
+       url: ${FIRECRAWL_MCP_URL}
+       tools: [firecrawl_scrape, firecrawl_search]
